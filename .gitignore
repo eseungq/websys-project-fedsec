@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# 데이터·모델 (용량이 커서 커밋하지 않음, 스크립트로 내려받거나 생성)
+data/*
+!data/README.md
+checkpoints/*
+!checkpoints/README.md
+
+# 실험 결과: 요약(config, env, summary)만 커밋하고 원시 로그는 제외
+experiments/*/logs/
+experiments/*/models/
+experiments/*/dlg_images/
+
+# 과제 명세 원본 (저작권·공개 전환 대비, 각자 로컬 보관)
+docs/00_spec/*.pdf
+
+# Frontend
+node_modules/
+web/frontend/dist/
