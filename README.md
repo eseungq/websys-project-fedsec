@@ -205,14 +205,18 @@ websys-project-fedsec/
 
 ## 시작하기
 
-> 구현이 진행되면 채워집니다. 상세 내용은 `docs/manuals/install.md`에 작성합니다.
+현재는 **정상 FedAvg 기준 실행**까지 구현되어 있습니다. 상세 내용은 `docs/manuals/install.md`에 작성할 예정입니다.
 
 ```bash
 git clone https://github.com/eseungq/websys-project-fedsec.git
 cd websys-project-fedsec
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python -m venv .venv && source .venv/bin/activate   # Python 3.10~3.13
+pip install -r requirements.txt && pip install -e .
+pytest                                               # 집계·분할 수치 예제 테스트
+python scripts/run_experiment.py --name baseline     # CIFAR-10 자동 다운로드(약 170MB) 후 20라운드
 ```
+
+Kaggle 실행 방법과 설정 바꾸는 법은 [`scripts/README.md`](scripts/README.md), 기준 설정의 근거는 [`docs/decisions/001-baseline-setup.md`](docs/decisions/001-baseline-setup.md)를 보세요.
 
 ---
 
