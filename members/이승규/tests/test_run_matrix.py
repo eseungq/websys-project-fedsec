@@ -54,10 +54,16 @@ def saved_config(expected: dict, **server) -> dict:
     return {**expected, "server": {"min_accepted": expected["plan"]["min_accepted"], **server}}
 
 
-def write_result(out_dir, config, summary):
+def write_result(out_dir, config, summary, rounds_logged=None, model=True):
+    """끝난 실행처럼 config.yaml, summary.json, rounds.csv(설정 라운드 수만큼), models/final_model.pt를 만든다."""
     out_dir.mkdir(parents=True)
     (out_dir / "config.yaml").write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
     (out_dir / "summary.json").write_text(summary, encoding="utf-8")
+    n = config["rounds"] if rounds_logged is None else rounds_logged
+    (out_dir / "rounds.csv").write_text("round\n" + "".join(f"{r}\n" for r in range(1, n + 1)), encoding="utf-8")
+    if model:
+        (out_dir / "models").mkdir()
+        (out_dir / "models" / "final_model.pt").write_bytes(b"")
 
 
 def test_run_status_and_index(tmp_path):
@@ -159,3 +165,33 @@ def test_summary_accepts_accuracy_bounds(tmp_path, value):
     write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": value, "final_test_acc": value}))
 
     assert run_status(tmp_path / run.name, expected) == ("done", [])
+
+
+@pytest.mark.parametrize("rounds_logged, model, problem", [
+    (39, True, "rounds.csv가 39줄 (설정 40라운드)"),       # 중간에 끊긴 로그
+    (None, False, "models/final_model.pt 없음"),             # summary 뒤 모델 저장 전에 끊김
+])
+def test_result_without_full_outputs_is_incomplete(tmp_path, rounds_logged, model, problem):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY, rounds_logged=rounds_logged, model=model)
+
+    assert run_status(tmp_path / run.name, expected) == ("incomplete", [problem])
+
+
+@pytest.mark.parametrize("seeds", [[0, 0], []])
+def test_duplicate_or_empty_choices_are_rejected(seeds):
+    with pytest.raises(ValueError):
+        plan_runs(["baseline"], ["normal"], ["fedavg"], seeds)
+
+
+def test_index_records_device_and_versions(tmp_path):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+    (tmp_path / run.name / "env.json").write_text(json.dumps({"device": "mps", "torch": "2.15.0", "commit": "abc",
+                                                               "dirty": False}), encoding="utf-8")
+
+    row = index_rows(tmp_path, [run], {run: "done"})[0]
+
+    assert (row["device"], row["torch"], row["commit"], row["dirty"]) == ("mps", "2.15.0", "abc", False)

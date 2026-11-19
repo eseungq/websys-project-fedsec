@@ -18,6 +18,9 @@ class ServerLog:
         out_dir.mkdir(parents=True, exist_ok=True)
         self._rounds_path = out_dir / "server_rounds.csv"
         self._exclusions_path = out_dir / "exclusions.csv"
+        existing = [p.name for p in (self._rounds_path, self._exclusions_path) if p.exists()]
+        if existing:  # 이어 쓰면 이전 실행의 라운드 1과 섞인다
+            raise FileExistsError(f"서버 기록 폴더 {out_dir}에 이전 기록이 있습니다: {', '.join(existing)}. 다른 --log-dir을 쓰세요.")
 
     def log_round(self, record: dict) -> None:
         _append_rows(self._rounds_path, [{k: _cell(v) for k, v in record.items()}])

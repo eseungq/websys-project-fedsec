@@ -26,7 +26,7 @@ from pathlib import Path
 
 import yaml
 
-from run_clients import add_experiment_args, add_scenario_args, client_setup
+from run_clients import EXPERIMENTS_DIR, add_experiment_args, add_scenario_args, client_setup, inside
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 RUN_SCRIPT = Path(__file__).resolve().parent / "run_server_experiment.py"
@@ -35,6 +35,8 @@ ATTACKS = ("normal", "attack")
 AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGATORS와 같음
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_PREFIX = "matrix"
+# 실행 환경 (기기가 다르면 같은 시드도 결과가 조금 다를 수 있어, 비교표에서 섞였는지 보이게 한다)
+ENV_KEYS = ("device", "torch", "commit", "dirty")
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "rounds_not_updated", "total_virtual_time", "total_sec")
 # 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
 REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
@@ -56,16 +58,25 @@ class Run:
                    "--env", f"configs/env/{self.env}.yaml", "--aggregator", self.aggregator,
                    "--attack" if self.attack == "attack" else "--no-attack",
                    "--seed", str(self.seed), "--evaluate-test"]
-        return command + (["--rounds", str(rounds)] if rounds else [])
+        return command + (["--rounds", str(rounds)] if rounds is not None else [])
+
+
+def positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"1 이상이어야 합니다: {value}")
+    return value
 
 
 def plan_runs(envs, attacks, aggregators, seeds) -> list[Run]:
     """시드 → 환경 → 공격 → 집계 순. 시드 하나를 끝내면 그 시드의 비교표가 다 채워진다."""
     for name, chosen, allowed in (("env", envs, ENVS), ("attack", attacks, ATTACKS),
-                                  ("aggregator", aggregators, AGGREGATORS)):
-        unknown = set(chosen) - set(allowed)
+                                  ("aggregator", aggregators, AGGREGATORS), ("seed", seeds, None)):
+        unknown = set(chosen) - set(allowed) if allowed else set()
         if unknown:
             raise ValueError(f"알 수 없는 {name}: {sorted(unknown)} (가능: {', '.join(allowed)})")
+        if not chosen or len(set(chosen)) != len(chosen):
+            raise ValueError(f"{name}는 겹치지 않는 값이 1개 이상이어야 합니다: {list(chosen)}")
     return [Run(env, attack, agg, seed) for seed in seeds for env in envs for attack in attacks for agg in aggregators]
 
 
@@ -117,6 +128,21 @@ def summary_problems(summary: dict) -> list[str]:
     return problems
 
 
+def output_problems(out_dir: Path, rounds: int) -> list[str]:
+    """summary.json 말고도 비교·재실행에 필요한 산출물이 끝까지 쓰였는지 (라운드 수, 최종 모델)."""
+    problems = []
+    try:
+        with (out_dir / "rounds.csv").open(encoding="utf-8") as f:
+            logged = sum(1 for _ in csv.DictReader(f))
+    except OSError:
+        logged = 0
+    if logged != rounds:
+        problems.append(f"rounds.csv가 {logged}줄 (설정 {rounds}라운드)")
+    if not (out_dir / "models" / "final_model.pt").exists():
+        problems.append("models/final_model.pt 없음")
+    return problems
+
+
 def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     """("todo" | "incomplete" | "stale" | "done", 다른 설정 또는 빠진 결과 목록)."""
     if not out_dir.exists():
@@ -132,7 +158,10 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     if problems:
         return "incomplete", problems
     mismatches = config_mismatches(saved, expected)
-    return ("stale", mismatches) if mismatches else ("done", [])
+    if mismatches:
+        return "stale", mismatches
+    problems = output_problems(out_dir, expected["rounds"])
+    return ("incomplete", problems) if problems else ("done", [])
 
 
 def index_rows(prefix_dir: Path, runs: list[Run], statuses: dict[Run, str]) -> list[dict]:
@@ -141,9 +170,19 @@ def index_rows(prefix_dir: Path, runs: list[Run], statuses: dict[Run, str]) -> l
         out_dir = prefix_dir / run.name
         status = statuses[run]
         summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8")) if status == "done" else {}
+        env = _read_json(out_dir / "env.json") if status == "done" else {}
         rows.append({"name": run.name, "env": run.env, "attack": run.attack, "aggregator": run.aggregator,
-                     "seed": run.seed, "status": status, **{key: summary.get(key, "") for key in SUMMARY_KEYS}})
+                     "seed": run.seed, "status": status, **{key: summary.get(key, "") for key in SUMMARY_KEYS},
+                     **{key: env.get(key, "") for key in ENV_KEYS}})
     return rows
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def write_index(prefix_dir: Path, rows: list[dict]) -> Path:
@@ -163,12 +202,12 @@ def main() -> None:
     parser.add_argument("--envs", nargs="+", default=list(ENVS))
     parser.add_argument("--attacks", nargs="+", default=list(ATTACKS))
     parser.add_argument("--aggregators", nargs="+", default=list(AGGREGATORS))
-    parser.add_argument("--rounds", type=int, help="라운드 수 덮어쓰기 (동작 확인용. 본 실험은 base.yaml 값)")
+    parser.add_argument("--rounds", type=positive_int, help="라운드 수 덮어쓰기 (동작 확인용. 본 실험은 base.yaml 값)")
     parser.add_argument("--dry-run", action="store_true", help="실행하지 않고 목록과 상태만 출력")
     args = parser.parse_args()
 
     runs = plan_runs(args.envs, args.attacks, args.aggregators, args.seeds)
-    prefix_dir = MEMBER_ROOT / "experiments" / args.prefix
+    prefix_dir = inside(EXPERIMENTS_DIR, args.prefix)
     checked = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds)) for run in runs}
     statuses = {run: status for run, (status, _) in checked.items()}
     for i, run in enumerate(runs, 1):

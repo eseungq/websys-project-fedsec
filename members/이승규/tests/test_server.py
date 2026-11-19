@@ -342,3 +342,12 @@ def test_non_json_post_cannot_close_round():
     assert client.post("/aggregate", data={"a": "1"}).status_code == 415
     assert state.round == 1
     assert client.post("/update", data={"client_id": "0"}).get_json()["data"]["reason"] == "bad_json"
+
+
+def test_server_log_refuses_folder_with_previous_records(tmp_path):
+    from fedsec.logger.server_log import ServerLog
+
+    ServerLog(tmp_path).log_round({"round": 1})
+
+    with pytest.raises(FileExistsError):   # 이어 쓰면 이전 실행의 라운드 1과 섞임
+        ServerLog(tmp_path)

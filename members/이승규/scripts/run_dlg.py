@@ -12,6 +12,7 @@
 import argparse
 import csv
 import json
+import math
 import sys
 import time
 from dataclasses import asdict, dataclass, replace
@@ -28,6 +29,7 @@ from fedsec.data.split import load_split
 from fedsec.experiment.config import whole_number
 from fedsec.experiment.runtime import environment_info
 from fedsec.models.lenet import build_dlg_lenet
+from run_clients import new_out_dir
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = MEMBER_ROOT.parents[1]
@@ -53,8 +55,11 @@ class DLGConfig:
 def _validated(cfg: DLGConfig) -> DLGConfig:
     checks = [
         (len(cfg.images) > 0 and len(set(cfg.images)) == len(cfg.images), "images는 겹치지 않는 1개 이상이어야 합니다."),
-        (len(cfg.sigmas) > 0 and all(s >= 0 for s in cfg.sigmas), "sigmas는 0 이상 값 1개 이상이어야 합니다."),
-        (len(cfg.iterations) > 0 and all(n > 0 for n in cfg.iterations), "iterations는 1 이상 값 1개 이상이어야 합니다."),
+        (cfg.client >= 0, "client는 0 이상이어야 합니다."),
+        (len(cfg.sigmas) > 0 and len(set(cfg.sigmas)) == len(cfg.sigmas)
+         and all(math.isfinite(s) and s >= 0 for s in cfg.sigmas), "sigmas는 겹치지 않는 0 이상 유한한 값 1개 이상이어야 합니다."),
+        (len(cfg.iterations) > 0 and len(set(cfg.iterations)) == len(cfg.iterations) and all(n > 0 for n in cfg.iterations),
+         "iterations는 겹치지 않는 1 이상 값 1개 이상이어야 합니다."),
         (cfg.record_every > 0, "record_every는 1 이상이어야 합니다."),
     ]
     for ok, message in checks:
@@ -82,7 +87,10 @@ def load_dlg_config(path: Path) -> DLGConfig:
 
 def load_images(cfg: DLGConfig) -> tuple[list[tuple[int, int, torch.Tensor]], list[str]]:
     """(학습 이미지 인덱스, 정답 클래스, [0, 1] 텐서 (1, 3, 32, 32)) 목록과 클래스 이름을 돌려준다."""
-    client_indices = set(load_split(REPO_ROOT / cfg.split)["clients"][cfg.client])
+    clients = load_split(REPO_ROOT / cfg.split)["clients"]
+    if cfg.client >= len(clients):
+        raise ValueError(f"client {cfg.client}가 없습니다 (클라이언트 {len(clients)}명)")
+    client_indices = set(clients[cfg.client])
     outside = [i for i in cfg.images if i not in client_indices]
     if outside:
         raise ValueError(f"클라이언트 {cfg.client}의 데이터가 아닌 이미지 인덱스입니다: {outside}")
@@ -191,15 +199,17 @@ def main() -> None:
     parser.add_argument("--dummy-seed", type=int, dest="dummy_seed", help="복원 시작 더미 초기값 시드만 바꿀 때")
     args = parser.parse_args()
 
-    out_dir = MEMBER_ROOT / "experiments" / "dlg" / args.name
-    if out_dir.exists():
-        sys.exit(f"이미 있는 결과 폴더입니다: {out_dir.relative_to(MEMBER_ROOT)} (다른 --name을 쓰세요)")
+    out_dir = new_out_dir(args.name, base=MEMBER_ROOT / "experiments" / "dlg")
     cfg = load_dlg_config(MEMBER_ROOT / args.config)
     overrides = {k: tuple(getattr(args, k)) for k in ("sigmas", "iterations", "images") if getattr(args, k) is not None}
     if args.dummy_seed is not None:
         overrides["dummy_seed"] = args.dummy_seed
     cfg = _validated(replace(cfg, **overrides))
 
+    # 임시 폴더에 다 쓴 뒤 이름을 바꾼다 (중간에 실패하면 반쪽 결과 폴더가 같은 --name을 막지 않게)
+    final_dir, out_dir = out_dir, out_dir.with_name(out_dir.name + ".partial")
+    if out_dir.exists():
+        sys.exit(f"이전에 실패한 임시 폴더가 있습니다. 확인 후 지우세요: {out_dir.relative_to(MEMBER_ROOT)}")
     results, trajectory = run_all(cfg, out_dir)
     (out_dir / "config.yaml").write_text(
         yaml.safe_dump({k: list(v) if isinstance(v, tuple) else v for k, v in asdict(cfg).items()},
@@ -209,7 +219,8 @@ def main() -> None:
     write_csv(results, out_dir / "results.csv")
     write_csv(trajectory, out_dir / "trajectory.csv")
     write_summary_png(cfg, results, out_dir)
-    print(f"결과: {out_dir.relative_to(MEMBER_ROOT)}")
+    out_dir.rename(final_dir)
+    print(f"결과: {final_dir.relative_to(MEMBER_ROOT)}")
 
 
 if __name__ == "__main__":

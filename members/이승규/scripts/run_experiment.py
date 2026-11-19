@@ -8,11 +8,11 @@
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 from fedsec.experiment.config import load_config
 from fedsec.experiment.runner import run_fedavg
+from run_clients import new_out_dir
 
 # 기본 설정·결과는 개인 폴더(members/이승규/), 공용 분할 파일·데이터는 레포 루트 기준
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
@@ -34,9 +34,7 @@ def main() -> None:
                         help="마지막에 공식 테스트셋도 평가 (설정 확정 후에만. 설정 비교는 검증 정확도로)")
     args = parser.parse_args()
 
-    out_dir = MEMBER_ROOT / "experiments" / args.name
-    if out_dir.exists():
-        sys.exit(f"이미 있는 결과 폴더입니다: {out_dir.relative_to(MEMBER_ROOT)} (다른 --name을 쓰세요)")
+    out_dir = new_out_dir(args.name)
 
     overrides = {k: getattr(args, k) for k in ("seed", "rounds", "lr", "momentum", "weight_decay", "local_ep", "local_bs")}
     cfg = load_config(MEMBER_ROOT / args.config).with_overrides(**overrides)

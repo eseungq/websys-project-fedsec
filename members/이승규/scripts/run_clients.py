@@ -84,8 +84,19 @@ def client_setup(args: argparse.Namespace) -> tuple[ExperimentConfig, ClientPlan
     return cfg, plan, attack_defense
 
 
-def new_out_dir(name: str) -> Path:
-    out_dir = MEMBER_ROOT / "experiments" / name
+EXPERIMENTS_DIR = MEMBER_ROOT / "experiments"
+
+
+def inside(base: Path, name: str) -> Path:
+    """base 아래 결과 폴더. ../나 절대 경로로 base 밖을 가리키면 멈춘다."""
+    out_dir = (base / name).resolve()
+    if out_dir == base.resolve() or not out_dir.is_relative_to(base.resolve()):
+        sys.exit(f"결과 폴더는 {base.relative_to(MEMBER_ROOT)}/ 아래여야 합니다: {name}")
+    return out_dir
+
+
+def new_out_dir(name: str, base: Path = EXPERIMENTS_DIR) -> Path:
+    out_dir = inside(base, name)
     if out_dir.exists():
         sys.exit(f"이미 있는 결과 폴더입니다: {out_dir.relative_to(MEMBER_ROOT)} (다른 --name을 쓰세요)")
     return out_dir

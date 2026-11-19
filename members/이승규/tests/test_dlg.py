@@ -140,3 +140,59 @@ def test_victim_gradients_requires_single_image():
 
     with pytest.raises(ValueError):
         victim_gradients(model, torch.rand(2, 3, 32, 32), torch.tensor([0, 1]))
+
+
+# scripts/run_dlg.py: 설정 검증과 "원본은 공격 입력이 아니라 평가에만"
+
+def _run_dlg_module():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import run_dlg
+    return run_dlg
+
+
+def _dlg_config(**changes):
+    from dataclasses import replace
+
+    run_dlg = _run_dlg_module()
+    base = run_dlg.DLGConfig(split="s", data_root="d", client=0, images=(1, 2), model_seed=0, dummy_seed=0,
+                             noise_seed=0, sigmas=(0.0, 0.01), iterations=(5,), record_every=1)
+    return replace(base, **changes)
+
+
+@pytest.mark.parametrize("changes", [
+    {"client": -1},                         # 예전에는 마지막 클라이언트를 조용히 골랐음
+    {"sigmas": (0.01, 0.01)},               # 같은 σ면 복원 이미지 파일이 덮어써짐
+    {"sigmas": (float("inf"),)},
+    {"iterations": (5, 5)},
+])
+def test_dlg_config_rejects_bad_values(changes):
+    with pytest.raises(ValueError):
+        _run_dlg_module()._validated(_dlg_config(**changes))
+
+
+def test_run_case_gives_attack_no_original_image_or_label(monkeypatch):
+    run_dlg = _run_dlg_module()
+    model, image, grads = _victim()
+    seen = []
+
+    def spy(*args, **kwargs):
+        seen.extend([*args, *kwargs.values()])
+        return reconstruct(*args, **kwargs)
+
+    monkeypatch.setattr(run_dlg, "reconstruct", spy)
+    run_dlg.run_case(model, grads, image, 3, 0.0, 2, _dlg_config())
+
+    tensors = [a for a in seen if isinstance(a, torch.Tensor)]
+    assert not any(t is image or (t.shape == image.shape and torch.equal(t, image)) for t in tensors)
+    assert tuple(image.shape) in seen          # 이미지 크기만 넘김
+
+
+def test_reconstruct_stops_and_marks_diverged_on_inf_gradients():
+    model, _, grads = _victim()
+
+    result = reconstruct(model, [torch.full_like(g, float("inf")) for g in grads], IMAGE_SHAPE, 50, dummy_seed=0)
+
+    assert result.diverged and result.iterations < 50

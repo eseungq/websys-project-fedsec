@@ -386,8 +386,8 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
         summary = {**summary, "final_test_acc": round(test_eval.acc, 4), "final_test_loss": round(test_eval.loss, 4)}
         log.log_class_acc(class_rows(cfg.rounds, "test", test_eval))
         log.log_client_acc(client_acc_rows(cfg.rounds, "test", test_eval, distributions))
-    log.write_summary(summary)
     save_state(snapshot.state, out_dir / "models" / "final_model.pt")
+    log.write_summary(summary)   # 마지막에 쓴다: summary.json이 있으면 실행이 끝까지 간 것 (run_matrix 완료 판정)
     return summary
 
 
