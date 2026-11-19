@@ -1,5 +1,6 @@
 """가상 클라이언트의 로컬 학습: 전역 모델에서 시작해 학습한 뒤 업데이트를 계산한다."""
 
+import math
 from dataclasses import dataclass
 
 import torch
@@ -48,6 +49,8 @@ def local_update(model: nn.Module, global_state: State, data: TensorData,
             optimizer.step()
             loss_sum += loss.detach() * len(batch)
         epoch_loss = loss_sum.item() / n
+    if not math.isfinite(epoch_loss):
+        raise FloatingPointError(f"로컬 학습 손실이 {epoch_loss}입니다 (발산). 학습률 등 설정을 확인하세요.")
 
     local_state = model.state_dict()
     update = {key: local_state[key].detach() - global_state[key] for key in global_state}

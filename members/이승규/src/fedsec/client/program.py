@@ -34,6 +34,8 @@ from fedsec.models.cnn import build_model
 from fedsec.server.serialization import State, decode_state, encode_state
 
 REQUEST_TIMEOUT_SEC = 120
+# 실험 설계상 정상인 제외 사유. 이 밖의 사유(non_finite, version_mismatch 등)는 버그이므로 실행을 멈춘다
+EXPECTED_EXCLUSIONS = frozenset({"late"})
 DEFAULT_SAVE_EVERY = 5      # 전역 모델 저장 간격 (라운드). 0이면 라운드 0·마지막만
 # 서버 /status의 config와 맞춰 볼 방어 설정 항목
 DEFENSE_KEYS = ("aggregator", "clip_norm", "clip_before_median")
@@ -184,8 +186,20 @@ def submit_all(api: ServerApi, snapshot: Snapshot, updates: dict[int, State], tr
         reply = api.submit({"client_id": cid, "round": snapshot.round, "model_version": snapshot.model_version,
                             "num_samples": trained[cid].result.num_samples, "delta_weights": encode_state(update),
                             "virtual_finish_time": finish[cid]})
+        check_reply(cid, reply)
         sent = {**sent, cid: Sent(update, finish[cid], reply, timed_now(device) - t_start)}
     return sent
+
+
+def check_reply(cid: int, reply: dict) -> None:
+    """채택 또는 예상한 제외(late)만 통과. 그 밖의 거부나 서버 오류는 결과를 믿을 수 없으므로 멈춘다."""
+    if reply.get("ok"):
+        return
+    data = reply.get("data")
+    reason = data.get("reason") if isinstance(data, dict) else None
+    if reason not in EXPECTED_EXCLUSIONS:
+        raise RuntimeError(f"클라이언트 {cid}의 제출이 예상하지 못한 이유로 거부되었습니다: "
+                           f"{reason or '서버 오류'} ({reply.get('error')})")
 
 
 def check_decision(decision: RoundDecision, record: dict) -> None:

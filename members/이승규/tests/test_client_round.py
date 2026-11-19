@@ -13,7 +13,8 @@ import torch
 from fedsec.aggregation.fedavg import apply_update, weighted_average
 from fedsec.aggregation.norms import update_norm
 from fedsec.client.local_train import TrainConfig, local_update
-from fedsec.client.program import check_decision, check_server, client_plan, fetch_snapshot, run_round
+from fedsec.client.program import (check_decision, check_reply, check_server, client_plan, fetch_snapshot,
+                                   run_round)
 from fedsec.data.cifar10 import TensorData
 from fedsec.environments.acceptance import judge_round
 from fedsec.environments.config import load_env_config
@@ -243,3 +244,96 @@ def test_check_server_rejects_other_round_policy(change):
 
     with pytest.raises(RuntimeError):
         check_server(status, CFG, NUM_CLIENTS, plan)
+
+
+@pytest.mark.parametrize("reply", [
+    {"ok": True, "data": {"accepted": True}, "error": None},
+    {"ok": False, "data": {"reason": "late"}, "error": "마감 초과"},
+])
+def test_check_reply_accepts_acceptance_and_late(reply):
+    check_reply(0, reply)
+
+
+@pytest.mark.parametrize("reply", [
+    {"ok": False, "data": {"reason": "non_finite"}, "error": "NaN"},          # 학습 발산
+    {"ok": False, "data": {"reason": "version_mismatch"}, "error": "버전"},     # 프로토콜 버그
+    {"ok": False, "data": None, "error": "서버 오류: RuntimeError"},          # 500 (예전에는 TypeError로 원인이 가려짐)
+])
+def test_check_reply_stops_on_unexpected_rejection(reply):
+    with pytest.raises(RuntimeError, match=str(reply["error"])[:3]):
+        check_reply(0, reply)
+
+
+def test_local_update_is_local_minus_global_and_keeps_inputs():
+    model = build_model(CFG.model)
+    start = {k: v.clone() for k, v in initial_global_state(SEED, CFG.model).items()}
+    before = {k: v.clone() for k, v in start.items()}
+
+    result = local_update(model, start, CLIENTS[0], CFG.train, client_generator(SEED, 1, 0))
+
+    trained = model.state_dict()
+    assert all(torch.equal(start[k], before[k]) for k in start)                      # 입력 불변
+    assert all(torch.allclose(result.update[k], trained[k] - start[k]) for k in start)  # 업데이트 정의
+    assert result.num_samples == PER_CLIENT
+
+
+def test_local_update_does_not_leak_previous_client_weights():
+    # 같은 model 객체를 재사용해도 매번 전역 모델에서 시작한다 (클라이언트 순서가 결과를 바꾸지 않음)
+    start = initial_global_state(SEED, CFG.model)
+    alone = local_update(build_model(CFG.model), start, CLIENTS[1], CFG.train, client_generator(SEED, 1, 1))
+    shared = build_model(CFG.model)
+    local_update(shared, start, CLIENTS[0], CFG.train, client_generator(SEED, 1, 0))
+    after_other = local_update(shared, start, CLIENTS[1], CFG.train, client_generator(SEED, 1, 1))
+
+    assert all(torch.equal(alone.update[k], after_other.update[k]) for k in start)
+
+
+def test_diverged_local_training_raises():
+    bad = TensorData(torch.full((PER_CLIENT, 3, 32, 32), float("nan")), CLIENTS[0].labels)
+
+    with pytest.raises(FloatingPointError):
+        local_update(build_model(CFG.model), initial_global_state(SEED, CFG.model), bad, CFG.train,
+                     client_generator(SEED, 1, 0))
+
+
+@pytest.fixture
+def live_server():
+    """실제 HTTP 서버 (임의 포트). ServerApi의 requests 경로·Host 검사·JSON 요구를 함께 확인한다."""
+    import threading
+
+    from werkzeug.serving import make_server
+
+    from fedsec.client.program import ServerApi
+    from fedsec.server.app import HOST
+
+    state = ServerState({"w": torch.zeros(2)}, num_clients=3)
+    server = make_server(HOST, 0, create_app(state))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield state, ServerApi(f"http://{HOST}:{server.server_port}")
+    server.shutdown()
+
+
+def test_server_api_round_trip_over_http(live_server):
+    from fedsec.server.serialization import encode_state
+
+    state, api = live_server
+    assert api.status()["round"] == 1
+    body = {"client_id": 0, "round": 1, "model_version": 0, "num_samples": 10,
+            "delta_weights": encode_state({"w": torch.ones(2)})}
+
+    assert api.submit(body)["ok"] is True
+    duplicate = api.submit(body)
+    assert (duplicate["ok"], duplicate["data"]["reason"]) == (False, "duplicate")
+    record = api.aggregate()
+    assert (record["updated"], record["skip_reason"]) == (False, "too_few_accepted")
+    assert api.model()["round"] == 2
+
+
+def test_server_api_raises_on_failed_aggregate(live_server):
+    state, api = live_server
+    state.policy = replace(state.policy, min_accepted=1)
+    state.pending = {0: object()}   # 집계할 수 없는 대기 항목 → 서버 500
+
+    with pytest.raises(RuntimeError, match="/aggregate 실패"):
+        api.aggregate()
