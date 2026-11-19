@@ -45,7 +45,7 @@ def main() -> None:
     defense = {key: value for key, value in attack_defense.to_dict().items() if not key.startswith("attack")}
     state = ServerState(initial_global_state(cfg.seed, cfg.model), num_clients=args.num_clients, policy=policy, log=log,
                         config={"seed": cfg.seed, "model": cfg.model, "config_file": args.config,
-                                "env": env.name, "env_file": args.env, **defense})
+                                "env": env.name, "env_file": args.env, "per_round": env.per_round, **defense})
     print(f"server http://{HOST}:{args.port} seed={cfg.seed} model={cfg.model} clients={args.num_clients} "
           f"env={env.name} per_round={env.per_round} deadline={env.timing.deadline} "
           f"aggregator={policy.aggregator_name} min_accepted={policy.min_accepted}", flush=True)

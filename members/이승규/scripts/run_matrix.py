@@ -8,9 +8,10 @@
     python scripts/run_matrix.py --prefix matrix_check --rounds 2 --seeds 0 --attacks attack   # 동작 확인 12회
 결과: experiments/<prefix>/<환경>-<normal|attack>-<집계>-s<시드>/, 실행 목록과 결과 요약 experiments/<prefix>/runs.csv
 - 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
-- 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·공격·방어·라운드 수)과 다르면 시작 전에 멈춘다
-  (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
-- 끊긴 실행(폴더는 있는데 summary.json 없음)이 있으면 시작 전에 멈춘다 → 그 폴더를 지우거나 옮긴 뒤 다시 실행
+- 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·참여 수·최소 채택 수·공격·방어·라운드 수)과 다르면
+  시작 전에 멈춘다 (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
+- 끊긴 실행(폴더는 있는데 summary.json 없음, 또는 summary.json에 결과 항목이 빠짐)이 있으면 시작 전에 멈춘다
+  → 그 폴더를 지우거나 옮긴 뒤 다시 실행
 - 실행이 실패하면 그 자리에서 멈춘다
 """
 
@@ -34,6 +35,8 @@ AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGAT
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_PREFIX = "matrix"
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "rounds_not_updated", "total_virtual_time", "total_sec")
+# 비교표에 꼭 있어야 하는 결과 (없으면 끝난 실행으로 치지 않음)
+REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
 
 
 @dataclass(frozen=True)
@@ -79,11 +82,29 @@ def expected_config(run: Run, prefix: str, rounds: int | None) -> dict:
 
 
 def config_mismatches(saved: dict, expected: dict) -> list[str]:
-    return [f"{key}: 지금 {expected[key]}, 기존 {saved.get(key)}" for key in expected if saved.get(key) != expected[key]]
+    """실행 설정(학습·일정·참여 수·최소 채택 수 등)과 서버가 실제로 쓴 최소 채택 수를 비교한다."""
+    mismatches = _diff(saved, expected, prefix="")
+    server = saved.get("server")
+    server_min = server.get("min_accepted") if isinstance(server, dict) else None
+    if server_min != expected["plan"]["min_accepted"]:
+        mismatches.append(f"server.min_accepted: 지금 {expected['plan']['min_accepted']}, 기존 {server_min}")
+    return mismatches
+
+
+def _diff(saved: dict, expected: dict, prefix: str) -> list[str]:
+    """다른 항목을 "train.weight_decay: 지금 0.0005, 기존 0.0"처럼 가장 안쪽 키로 보여 준다."""
+    lines = []
+    for key, want in expected.items():
+        have = saved.get(key)
+        if isinstance(want, dict) and isinstance(have, dict):
+            lines += _diff(have, want, f"{prefix}{key}.")
+        elif have != want:
+            lines.append(f"{prefix}{key}: 지금 {want}, 기존 {have}")
+    return lines
 
 
 def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
-    """("todo" | "incomplete" | "stale" | "done", 다른 설정 목록)."""
+    """("todo" | "incomplete" | "stale" | "done", 다른 설정 또는 빠진 결과 목록)."""
     if not out_dir.exists():
         return "todo", []
     try:
@@ -93,6 +114,9 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
         return "incomplete", []
     if not isinstance(summary, dict) or not isinstance(saved, dict):
         return "incomplete", []
+    missing = [key for key in REQUIRED_SUMMARY_KEYS if summary.get(key) is None]
+    if missing:
+        return "incomplete", [f"summary.json에 {key} 없음" for key in missing]
     mismatches = config_mismatches(saved, expected)
     return ("stale", mismatches) if mismatches else ("done", [])
 
@@ -135,9 +159,11 @@ def main() -> None:
     statuses = {run: status for run, (status, _) in checked.items()}
     for i, run in enumerate(runs, 1):
         print(f"{i:>3}/{len(runs)} [{statuses[run]:>10}] {run.name}")
-    incomplete = [run.name for run in runs if statuses[run] == "incomplete"]
+    incomplete = [run.name + "".join(f"\n    {reason}" for reason in checked[run][1])
+                  for run in runs if statuses[run] == "incomplete"]
     if incomplete:
-        sys.exit(f"끊긴 실행이 있습니다 (summary.json 없음). 지우거나 옮긴 뒤 다시 실행하세요: {', '.join(incomplete)}")
+        sys.exit("끊긴 실행이 있습니다 (summary.json 없음 또는 결과 항목 빠짐). 지우거나 옮긴 뒤 다시 실행하세요:\n  "
+                 + "\n  ".join(incomplete))
     stale = [f"{run.name}\n    " + "\n    ".join(checked[run][1]) for run in runs if statuses[run] == "stale"]
     if stale:
         sys.exit("같은 이름의 결과가 지금 설정과 다릅니다. --prefix를 바꾸거나 폴더를 옮긴 뒤 다시 실행하세요:\n  "

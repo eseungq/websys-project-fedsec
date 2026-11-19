@@ -81,6 +81,8 @@ class ClientPlan:
     malicious: tuple[int, ...]
     delayed: tuple[int, ...]
     timing: VirtualTiming
+    per_round: int | None   # 서버의 라운드 참여자 수 (None이면 전원). 서버 설정과 대조하고 결과 재사용 판정에 씀
+    min_accepted: int       # 서버의 모델 갱신 최소 채택 수. 위와 같음
     attack: bool
     attack_scale: float
     defense: dict           # 서버 설정과 대조할 방어 설정 (DEFENSE_KEYS)
@@ -96,7 +98,8 @@ def client_plan(experiment_id: str, env: EnvConfig, attack_defense: AttackDefens
     delayed = delayed_clients(seed, num_clients, env.num_delayed, env.delayed_ids, exclude=exclude)
     ad = attack_defense.to_dict()
     return ClientPlan(experiment_id=experiment_id, env_name=env.name, malicious=malicious, delayed=delayed,
-                      timing=env.timing, attack=attack_defense.attack, attack_scale=attack_defense.attack_scale,
+                      timing=env.timing, per_round=env.per_round, min_accepted=env.min_accepted,
+                      attack=attack_defense.attack, attack_scale=attack_defense.attack_scale,
                       defense={key: ad[key] for key in DEFENSE_KEYS})
 
 
@@ -139,10 +142,12 @@ def fetch_snapshot(api: ServerApi, device: torch.device, expected_round: int) ->
 
 
 def check_server(status: dict, cfg: ExperimentConfig, num_clients: int, plan: ClientPlan) -> None:
-    """서버가 같은 시드·모델·클라이언트 수·환경·방어 설정으로 처음 상태에서 시작했는지 확인한다."""
+    """서버가 같은 시드·모델·클라이언트 수·환경·참여·채택 규칙·방어 설정으로 처음 상태에서 시작했는지 확인한다."""
     server_cfg = status["config"]
     pairs = [("seed", server_cfg.get("seed"), cfg.seed), ("model", server_cfg.get("model"), cfg.model),
              ("num_clients", status["num_clients"], num_clients), ("env", server_cfg.get("env"), plan.env_name),
+             ("per_round", server_cfg.get("per_round"), plan.per_round),
+             ("min_accepted", status["min_accepted"], plan.min_accepted),
              *[(key, server_cfg.get(key), plan.defense[key]) for key in DEFENSE_KEYS]]
     mismatches = [f"{name}: 서버 {theirs}, 클라이언트 {ours}" for name, theirs, ours in pairs if theirs != ours]
     if status["round"] != 1 or status["model_version"] != 0:

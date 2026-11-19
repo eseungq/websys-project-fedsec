@@ -13,7 +13,7 @@ import torch
 from fedsec.aggregation.fedavg import apply_update, weighted_average
 from fedsec.aggregation.norms import update_norm
 from fedsec.client.local_train import TrainConfig, local_update
-from fedsec.client.program import check_decision, client_plan, fetch_snapshot, run_round
+from fedsec.client.program import check_decision, check_server, client_plan, fetch_snapshot, run_round
 from fedsec.data.cifar10 import TensorData
 from fedsec.environments.acceptance import judge_round
 from fedsec.environments.config import load_env_config
@@ -226,3 +226,20 @@ def test_norm_columns_match_update_norm_definition():
     first = local_update(model, start, CLIENTS[0], CFG.train, client_generator(SEED, 1, 0))
 
     assert rows[0]["update_norm"] == round(update_norm(first.update), 4)
+
+
+@pytest.mark.parametrize("change", [{"min_accepted": 8}, {"config_per_round": 5}])
+def test_check_server_rejects_other_round_policy(change):
+    env = _env("baseline")
+    plan = client_plan("test", env, AD, SEED, NUM_CLIENTS)
+    defense = {key: plan.defense[key] for key in plan.defense}
+    status = {"round": 1, "model_version": 0, "num_clients": NUM_CLIENTS, "min_accepted": env.min_accepted,
+              "config": {"seed": SEED, "model": CFG.model, "env": env.name, "per_round": env.per_round, **defense}}
+    check_server(status, CFG, NUM_CLIENTS, plan)  # 같으면 통과
+    if "min_accepted" in change:
+        status = {**status, "min_accepted": change["min_accepted"]}
+    else:
+        status = {**status, "config": {**status["config"], "per_round": change["config_per_round"]}}
+
+    with pytest.raises(RuntimeError):
+        check_server(status, CFG, NUM_CLIENTS, plan)

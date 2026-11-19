@@ -2,6 +2,7 @@
 
 import json
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -45,6 +46,14 @@ def test_command_always_evaluates_test_and_sets_attack_flag():
     assert attack[attack.index("--name") + 1] == "m/delay-attack-median-s1"
 
 
+SUMMARY = json.dumps({"final_val_acc": 0.4, "final_test_acc": 0.5})
+
+
+def saved_config(expected: dict, **server) -> dict:
+    """run_clients가 남기는 config.yaml처럼 서버 상태(server)를 붙인다. 기본은 서버도 같은 최소 채택 수."""
+    return {**expected, "server": {"min_accepted": expected["plan"]["min_accepted"], **server}}
+
+
 def write_result(out_dir, config, summary):
     out_dir.mkdir(parents=True)
     (out_dir / "config.yaml").write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
@@ -54,8 +63,8 @@ def write_result(out_dir, config, summary):
 def test_run_status_and_index(tmp_path):
     runs = plan_runs(["baseline"], ["normal"], ["fedavg", "median", "clip_fedavg"], [0])
     expected = {run: expected_config(run, "m", rounds=None) for run in runs}
-    write_result(tmp_path / runs[0].name, {**expected[runs[0]], "server_url": "http://127.0.0.1:1"},
-                 json.dumps({"final_test_acc": 0.5}))
+    write_result(tmp_path / runs[0].name, {**saved_config(expected[runs[0]]), "server_url": "http://127.0.0.1:1"},
+                 SUMMARY)
     (tmp_path / runs[1].name).mkdir()  # 끊긴 실행
 
     statuses = {run: run_status(tmp_path / run.name, expected[run])[0] for run in runs}
@@ -68,7 +77,7 @@ def test_run_status_and_index(tmp_path):
 
 def test_short_check_result_is_not_reused_for_full_run(tmp_path):
     run = plan_runs(["baseline"], ["attack"], ["median"], [0])[0]
-    write_result(tmp_path / run.name, expected_config(run, "m", rounds=2), "{}")  # 2라운드 확인 결과
+    write_result(tmp_path / run.name, saved_config(expected_config(run, "m", rounds=2)), SUMMARY)  # 2라운드 확인 결과
 
     status, mismatches = run_status(tmp_path / run.name, expected_config(run, "m", rounds=None))
 
@@ -79,7 +88,7 @@ def test_short_check_result_is_not_reused_for_full_run(tmp_path):
 def test_other_scenario_result_is_stale(tmp_path):
     run = plan_runs(["baseline"], ["attack"], ["median"], [0])[0]
     other = plan_runs(["delay"], ["attack"], ["median"], [0])[0]
-    write_result(tmp_path / run.name, expected_config(other, "m", rounds=None), "{}")
+    write_result(tmp_path / run.name, saved_config(expected_config(other, "m", rounds=None)), SUMMARY)
 
     assert run_status(tmp_path / run.name, expected_config(run, "m", rounds=None))[0] == "stale"
 
@@ -89,3 +98,44 @@ def test_broken_summary_counts_as_incomplete(tmp_path):
     write_result(tmp_path / run.name, expected_config(run, "m", rounds=None), "{")
 
     assert run_status(tmp_path / run.name, expected_config(run, "m", rounds=None))[0] == "incomplete"
+
+
+def test_other_min_accepted_result_is_stale(tmp_path):
+    run = plan_runs(["baseline"], ["attack"], ["median"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    saved = deepcopy(expected)
+    saved["plan"]["min_accepted"] = 8
+    write_result(tmp_path / run.name, saved_config(saved), SUMMARY)
+
+    status, mismatches = run_status(tmp_path / run.name, expected)
+
+    assert status == "stale"
+    assert mismatches == ["plan.min_accepted: 지금 3, 기존 8", "server.min_accepted: 지금 3, 기존 8"]
+
+
+def test_server_min_accepted_differs_is_stale(tmp_path):
+    run = plan_runs(["baseline"], ["attack"], ["median"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected, min_accepted=8), SUMMARY)
+
+    status, mismatches = run_status(tmp_path / run.name, expected)
+
+    assert status == "stale" and mismatches == ["server.min_accepted: 지금 3, 기존 8"]
+
+
+def test_other_per_round_result_is_stale(tmp_path):
+    run = plan_runs(["partial"], ["attack"], ["median"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    saved = deepcopy(expected)
+    saved["plan"]["per_round"] = 10
+    write_result(tmp_path / run.name, saved_config(saved), SUMMARY)
+
+    assert run_status(tmp_path / run.name, expected)[0] == "stale"
+
+
+def test_summary_without_test_acc_is_incomplete(tmp_path):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": 0.4}))
+
+    assert run_status(tmp_path / run.name, expected) == ("incomplete", ["summary.json에 final_test_acc 없음"])

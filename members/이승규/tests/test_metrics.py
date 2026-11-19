@@ -97,7 +97,8 @@ def test_run_clients_writes_metrics_and_checkpoints(tmp_path, monkeypatch):
     policy = scenario_policy(env, build_defense(AD), SEED, NUM_CLIENTS)
     defense = {key: value for key, value in AD.to_dict().items() if not key.startswith("attack")}
     state = ServerState(initial_global_state(SEED, cfg.model), num_clients=NUM_CLIENTS, policy=policy,
-                        config={"seed": SEED, "model": cfg.model, "env": env.name, **defense})
+                        config={"seed": SEED, "model": cfg.model, "env": env.name, "per_round": env.per_round,
+                                **defense})
     api = FlaskApi(create_app(state).test_client())
     monkeypatch.setattr(program, "ServerApi", lambda url: api)
     monkeypatch.setattr(program, "_load_data", lambda cfg, root, device: (VAL, CLIENTS, VAL))
