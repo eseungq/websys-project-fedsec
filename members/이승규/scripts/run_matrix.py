@@ -7,10 +7,11 @@
     python scripts/run_matrix.py --seeds 0 1 2                     # 본 실험
     python scripts/run_matrix.py --prefix matrix_check --rounds 2 --seeds 0 --attacks attack   # 동작 확인 12회
 결과: experiments/<prefix>/<환경>-<normal|attack>-<집계>-s<시드>/, 실행 목록과 결과 요약 experiments/<prefix>/runs.csv
-- 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
+- 끝난 실행(summary.json과 비교에 필요한 로그가 모두 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
 - 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·참여 수·최소 채택 수·공격·방어·라운드 수)과 다르면
   시작 전에 멈춘다 (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
-- 끊긴 실행(폴더는 있는데 summary.json 없음, 또는 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님)이 있으면 시작 전에 멈춘다
+- 끊긴 실행(summary.json 없음, 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님, rounds.csv·clients.csv 줄 수가
+  라운드 수와 맞지 않음, class_acc.csv·client_acc.csv가 비었음, env.json을 읽을 수 없음)이 있으면 시작 전에 멈춘다
   → 그 폴더를 지우거나 옮긴 뒤 다시 실행
 - 실행이 실패하면 그 자리에서 멈춘다
 """
@@ -25,7 +26,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from run_clients import EXPERIMENTS_DIR, add_experiment_args, add_scenario_args, client_setup, inside
+from run_clients import (
+    DEFAULT_NUM_CLIENTS,
+    EXPERIMENTS_DIR,
+    add_experiment_args,
+    add_scenario_args,
+    client_setup,
+    inside,
+)
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 RUN_SCRIPT = Path(__file__).resolve().parent / "run_server_experiment.py"
@@ -34,8 +42,11 @@ ATTACKS = ("normal", "attack")
 AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGATORS와 같음
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_PREFIX = "matrix"
+NUM_CLIENTS = DEFAULT_NUM_CLIENTS
 # 실행 환경 (기기가 다르면 같은 시드도 결과가 조금 다를 수 있어, 비교표에서 섞였는지 보이게 한다)
-ENV_KEYS = ("device", "torch", "commit", "dirty")
+RUN_ENV_KEYS = ("device", "gpu", "torch", "commit", "dirty")
+# 클래스별·클라이언트별 비교에 쓰는 로그. 비어 있으면 끝난 실행으로 치지 않음
+REQUIRED_LOGS = ("class_acc.csv", "client_acc.csv")
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "rounds_not_updated", "total_virtual_time", "total_sec")
 # 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
 REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
@@ -128,31 +139,44 @@ def summary_problems(summary: dict) -> list[str]:
 
 
 def output_problems(out_dir: Path, rounds: int) -> list[str]:
-    """summary.json 말고도 비교·재실행에 필요한 산출물이 끝까지 쓰였는지 (라운드 수, 최종 모델)."""
+    """summary.json 말고도 비교에 필요한 산출물이 끝까지 쓰였는지.
+
+    models/는 커밋하지 않으므로 보지 않는다. summary.json을 모델 저장 뒤에 쓰므로 끝까지 갔는지는 summary로 안다.
+    """
     problems = []
-    try:
-        with (out_dir / "rounds.csv").open(encoding="utf-8") as f:
-            logged = sum(1 for _ in csv.DictReader(f))
-    except OSError:
-        logged = 0
+    logged = _count_rows(out_dir / "rounds.csv")
     if logged != rounds:
         problems.append(f"rounds.csv가 {logged}줄 (설정 {rounds}라운드)")
-    if not (out_dir / "models" / "final_model.pt").exists():
-        problems.append("models/final_model.pt 없음")
+    logged = _count_rows(out_dir / "clients.csv")
+    if logged != rounds * NUM_CLIENTS:
+        problems.append(f"clients.csv가 {logged}줄 (설정 {rounds}라운드 × 클라이언트 {NUM_CLIENTS}명)")
+    problems += [f"{name} 없음 또는 비어 있음" for name in REQUIRED_LOGS if _count_rows(out_dir / name) == 0]
+    if not _read_json(out_dir / "env.json"):
+        problems.append("env.json을 읽을 수 없음")
     return problems
+
+
+def _count_rows(path: Path) -> int:
+    try:
+        with path.open(encoding="utf-8") as f:
+            return sum(1 for _ in csv.DictReader(f))
+    except OSError:
+        return 0
 
 
 def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     """("todo" | "incomplete" | "stale" | "done", 다른 설정 또는 빠진 결과 목록)."""
     if not out_dir.exists():
         return "todo", []
+    summary = _read_json(out_dir / "summary.json")
+    if not summary:
+        return "incomplete", ["summary.json 없음 또는 읽을 수 없음"]
     try:
-        summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
         saved = yaml.safe_load((out_dir / "config.yaml").read_text(encoding="utf-8"))
-    except (OSError, ValueError, yaml.YAMLError):
-        return "incomplete", []
-    if not isinstance(summary, dict) or not isinstance(saved, dict):
-        return "incomplete", []
+    except (OSError, yaml.YAMLError):
+        saved = None
+    if not isinstance(saved, dict):
+        return "incomplete", ["config.yaml 없음 또는 읽을 수 없음"]
     problems = summary_problems(summary)
     if problems:
         return "incomplete", problems
@@ -172,7 +196,7 @@ def index_rows(prefix_dir: Path, runs: list[Run], statuses: dict[Run, str]) -> l
         env = _read_json(out_dir / "env.json") if status == "done" else {}
         rows.append({"name": run.name, "env": run.env, "attack": run.attack, "aggregator": run.aggregator,
                      "seed": run.seed, "status": status, **{key: summary.get(key, "") for key in SUMMARY_KEYS},
-                     **{key: env.get(key, "") for key in ENV_KEYS}})
+                     **{key: env.get(key, "") for key in RUN_ENV_KEYS}})
     return rows
 
 

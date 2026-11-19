@@ -10,7 +10,7 @@ import pytest
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMBER_ROOT / "scripts"))
 import yaml
-from run_matrix import Run, expected_config, index_rows, plan_runs, run_status
+from run_matrix import NUM_CLIENTS, Run, expected_config, index_rows, plan_runs, run_status
 
 from fedsec.experiment.config import AGGREGATORS
 
@@ -54,16 +54,23 @@ def saved_config(expected: dict, **server) -> dict:
     return {**expected, "server": {"min_accepted": expected["plan"]["min_accepted"], **server}}
 
 
-def write_result(out_dir, config, summary, rounds_logged=None, model=True):
-    """끝난 실행처럼 config.yaml, summary.json, rounds.csv(설정 라운드 수만큼), models/final_model.pt를 만든다."""
+def write_result(out_dir, config, summary, rounds_logged=None, clients_logged=None, skip=()):
+    """끝난 실행처럼 config.yaml, summary.json과 비교에 필요한 산출물을 만든다. skip에 적은 파일은 만들지 않는다."""
     out_dir.mkdir(parents=True)
-    (out_dir / "config.yaml").write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
-    (out_dir / "summary.json").write_text(summary, encoding="utf-8")
     n = config["rounds"] if rounds_logged is None else rounds_logged
-    (out_dir / "rounds.csv").write_text("round\n" + "".join(f"{r}\n" for r in range(1, n + 1)), encoding="utf-8")
-    if model:
-        (out_dir / "models").mkdir()
-        (out_dir / "models" / "final_model.pt").write_bytes(b"")
+    m = config["rounds"] * NUM_CLIENTS if clients_logged is None else clients_logged
+    files = {
+        "config.yaml": yaml.safe_dump(config, allow_unicode=True),
+        "summary.json": summary,
+        "rounds.csv": "round\n" + "".join(f"{r}\n" for r in range(1, n + 1)),
+        "clients.csv": "round\n" + "1\n" * m,
+        "class_acc.csv": "round,split,class\n1,val,0\n",
+        "client_acc.csv": "round,client\n1,0\n",
+        "env.json": json.dumps({"device": "mps", "gpu": None, "torch": "2.15.0", "commit": "abc", "dirty": False}),
+    }
+    for name, text in files.items():
+        if name not in skip:
+            (out_dir / name).write_text(text, encoding="utf-8")
 
 
 def test_run_status_and_index(tmp_path):
@@ -167,16 +174,37 @@ def test_summary_accepts_accuracy_bounds(tmp_path, value):
     assert run_status(tmp_path / run.name, expected) == ("done", [])
 
 
-@pytest.mark.parametrize("rounds_logged, model, problem", [
-    (39, True, "rounds.csv가 39줄 (설정 40라운드)"),       # 중간에 끊긴 로그
-    (None, False, "models/final_model.pt 없음"),             # summary 뒤 모델 저장 전에 끊김
+@pytest.mark.parametrize("kwargs, problem", [
+    ({"rounds_logged": 39}, "rounds.csv가 39줄 (설정 40라운드)"),                       # 중간에 끊긴 로그
+    ({"clients_logged": 399}, "clients.csv가 399줄 (설정 40라운드 × 클라이언트 10명)"),
+    ({"skip": ("class_acc.csv",)}, "class_acc.csv 없음 또는 비어 있음"),
+    ({"skip": ("client_acc.csv",)}, "client_acc.csv 없음 또는 비어 있음"),
+    ({"skip": ("env.json",)}, "env.json을 읽을 수 없음"),
 ])
-def test_result_without_full_outputs_is_incomplete(tmp_path, rounds_logged, model, problem):
+def test_result_without_full_outputs_is_incomplete(tmp_path, kwargs, problem):
     run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
     expected = expected_config(run, "m", rounds=None)
-    write_result(tmp_path / run.name, saved_config(expected), SUMMARY, rounds_logged=rounds_logged, model=model)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY, **kwargs)
 
     assert run_status(tmp_path / run.name, expected) == ("incomplete", [problem])
+
+
+def test_result_without_model_file_is_done(tmp_path):
+    # models/는 커밋하지 않으므로, 커밋된 결과를 받은 팀원 쪽에서도 끝난 실행으로 보여야 한다
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+
+    assert not (tmp_path / run.name / "models").exists()
+    assert run_status(tmp_path / run.name, expected) == ("done", [])
+
+
+def test_unreadable_summary_reports_which_file(tmp_path):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY, skip=("summary.json",))
+
+    assert run_status(tmp_path / run.name, expected) == ("incomplete", ["summary.json 없음 또는 읽을 수 없음"])
 
 
 @pytest.mark.parametrize("seeds", [[0, 0], []])
@@ -188,10 +216,11 @@ def test_duplicate_or_empty_choices_are_rejected(seeds):
 def test_index_records_device_and_versions(tmp_path):
     run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
     expected = expected_config(run, "m", rounds=None)
-    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
-    (tmp_path / run.name / "env.json").write_text(json.dumps({"device": "mps", "torch": "2.15.0", "commit": "abc",
-                                                               "dirty": False}), encoding="utf-8")
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY, skip=("env.json",))
+    (tmp_path / run.name / "env.json").write_text(json.dumps({"device": "cuda", "gpu": "Tesla T4", "torch": "2.15.0",
+                                                               "commit": "abc", "dirty": False}), encoding="utf-8")
 
     row = index_rows(tmp_path, [run], {run: "done"})[0]
 
-    assert (row["device"], row["torch"], row["commit"], row["dirty"]) == ("mps", "2.15.0", "abc", False)
+    assert (row["device"], row["gpu"], row["torch"], row["commit"], row["dirty"]) == ("cuda", "Tesla T4", "2.15.0",
+                                                                                     "abc", False)

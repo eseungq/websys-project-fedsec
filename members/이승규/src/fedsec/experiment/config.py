@@ -29,9 +29,14 @@ class ExperimentConfig:
         return _validated(replace(self, **top, train=replace(self.train, **train)))
 
 
+# 라운드·클라이언트별 시드(runtime.client_generator: seed × 10⁸ + …)가 torch 시드 범위(2⁶³ 미만)를 넘지 않는 값
+MAX_SEED = 2**32 - 1
+
+
 def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     t = cfg.train
     checks = [
+        (0 <= cfg.seed <= MAX_SEED, f"seed는 0 이상 {MAX_SEED} 이하여야 합니다."),
         (cfg.rounds > 0, "rounds는 1 이상이어야 합니다."),
         (cfg.eval_bs > 0, "eval_bs는 1 이상이어야 합니다."),
         (all(math.isfinite(v) for v in (t.lr, t.momentum, t.weight_decay)), "lr, momentum, weight_decay는 유한한 숫자여야 합니다."),

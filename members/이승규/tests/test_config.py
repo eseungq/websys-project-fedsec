@@ -50,12 +50,22 @@ def test_load_config_accepts_whole_number_float_and_string(tmp_path):
 
 
 
-@pytest.mark.parametrize("value", [9007199254740993, "9007199254740993"])
+@pytest.mark.parametrize("value", [4294967295, "4294967295"])
 def test_load_config_keeps_large_seed_exact(tmp_path, value):
-    # float를 거치면 2**53 + 1이 2**53으로 바뀌던 문제
     path = write_base(tmp_path, BASE_TEXT.replace("seed: 0", f"seed: {value!r}"))
 
-    assert load_config(path).seed == 9007199254740993
+    assert load_config(path).seed == 2**32 - 1
+
+
+@pytest.mark.parametrize("value", [-1, 2**32, 9007199254740993])
+def test_seed_outside_supported_range_is_rejected(tmp_path, value):
+    # 2**38 정도부터 첫 라운드의 클라이언트 시드 계산에서 오버플로가 나던 값. CLI --seed도 같은 검사를 거친다
+    path = write_base(tmp_path, BASE_TEXT.replace("seed: 0", f"seed: {value}"))
+
+    with pytest.raises(ValueError, match="seed는 0 이상"):
+        load_config(path)
+    with pytest.raises(ValueError, match="seed는 0 이상"):
+        load_config(write_base(tmp_path)).with_overrides(seed=value)
 
 @pytest.mark.parametrize("text", [
     BASE_TEXT + "rouns: 50\n",                              # 오타 키: 예전에는 조용히 무시되어 40라운드로 실행됨
