@@ -1,0 +1,10 @@
+# S1. momentum × lr: 실질 보폭 lr/(1−m) = 0.05 / 0.1 / 0.2
+# m=0.9(lr 0.005/0.01/0.02)는 experiments/lr*_r50 결과를 재사용하므로 여기 없음
+common: {seed: 0, rounds: 50}
+runs:
+  - {name: m0.5_lr0.025, momentum: 0.5, lr: 0.025}
+  - {name: m0.5_lr0.05,  momentum: 0.5, lr: 0.05}
+  - {name: m0.5_lr0.1,   momentum: 0.5, lr: 0.1}
+  - {name: m0_lr0.05,    momentum: 0.0, lr: 0.05}
+  - {name: m0_lr0.1,     momentum: 0.0, lr: 0.1}
+  - {name: m0_lr0.2,     momentum: 0.0, lr: 0.2}
