@@ -22,8 +22,10 @@ runs:
 ```
 - 바꿀 수 있는 값: `seed rounds lr momentum weight_decay local_ep local_bs`. 나머지는 `configs/base.yaml`.
 - 결과: `experiments/sweep/<name>/`
-- 끝난 실행(`summary.json` 있음)은 건너뜀 → 끊겨도 같은 명령으로 이어서 실행. 단, 기존 `config.yaml`이 요청 값과 다르면 멈춤.
+- 끝난 실행(`summary.json` 있음)은 건너뜀 → 끊겨도 같은 명령으로 이어서 실행. 단, `configs/base.yaml`에 옵션을 덮어쓴 실제 설정이 기존 `config.yaml`과 다르면 멈춤(실행 목록에 없는 값이 `base.yaml`에서 바뀐 경우 포함).
 - 끊긴 실행(폴더만 있고 `summary.json` 없음)이 있으면 멈춤 → 그 폴더를 지우거나 옮긴 뒤 다시 실행.
+- `configs/base.yaml`은 시작할 때 한 번 읽고 확인합니다(옵티마이저는 `sgd`만). 탐색 도중에는 고치지 마세요.
+- 비교하는 것은 `config.yaml`에 기록되는 값뿐입니다. 분할 파일 내용, 데이터, 코드가 바뀐 것은 잡지 못합니다.
 - 실행이 실패하면 그 자리에서 멈추고 `[2/6] <이름> 실패 (종료 코드 N)`을 출력.
 
 ## summarize.py

@@ -3,7 +3,9 @@
 예) python tools/sweep.py tools/plans/s1.yaml
     python tools/sweep.py tools/plans/s1.yaml --dry-run      # 실행할 명령만 출력
 결과: experiments/sweep/<name>/
-- 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
+- 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행.
+  단, configs/base.yaml에 옵션을 덮어쓴 실제 설정이 기존 config.yaml과 다르면 멈춘다
+- configs/base.yaml은 시작할 때 한 번 읽는다 → 탐색 도중에 고치지 말 것
 - 끊긴 실행(폴더는 있는데 summary.json 없음)이 있으면 멈춘다 → 그 폴더를 지우거나 옮긴 뒤 다시 실행
 - 실행이 실패하면 그 자리에서 멈추고 실패한 이름을 출력한다
 
@@ -24,8 +26,14 @@ import yaml
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 SWEEP_DIR = "sweep"
+BASE_CONFIG = "configs/base.yaml"      # run_experiment.py의 --config 기본값과 같음
 OPTIONS = ("seed", "rounds", "lr", "momentum", "weight_decay", "local_ep", "local_bs")
 INT_OPTIONS = ("seed", "rounds", "local_ep", "local_bs")
+TOP_OPTIONS = ("seed", "rounds")       # 나머지 옵션은 train 아래 값
+# config.yaml에 기록되는 키와 형 (fedsec.experiment.config.load_config와 같은 규칙. tests/test_sweep_contract.py가 확인)
+TOP_TYPES = {"seed": int, "split": str, "data_root": str, "rounds": int, "model": str, "eval_bs": int}
+TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": int, "local_bs": int}
+SUPPORTED_OPTIMIZERS = ("sgd",)
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -69,14 +77,46 @@ def build_command(python: str, run: dict) -> list[str]:
     return cmd
 
 
-def config_mismatches(config: dict, options: dict) -> list[str]:
-    """이미 있는 결과의 config.yaml이 요청한 값과 다른 항목들."""
-    actual = {"seed": config.get("seed"), "rounds": config.get("rounds"), **(config.get("train") or {})}
-    return [f"{key}: 요청 {value}, 기존 {actual.get(key)}" for key, value in options.items()
-            if actual.get(key) is None or not math.isclose(actual[key], value)]
+def _check_mapping(config, where: str) -> None:
+    if not isinstance(config, dict) or not isinstance(config.get("train") or {}, dict):
+        raise ValueError(f"{where}: 설정 묶음이 아닙니다.")
 
 
-def run_status(out_dir: Path, options: dict) -> str:
+def _typed(values: dict, types: dict, where: str) -> dict:
+    """config.yaml에 기록되는 키만 남기고 load_config와 같은 형으로 바꾼다."""
+    try:
+        return {key: cast(values[key]) for key, cast in types.items() if key in values}
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"{where}: 값의 형식이 잘못됐습니다: {e}") from e
+
+
+def expected_config(base: dict, options: dict) -> dict:
+    """base.yaml 위에 옵션을 덮어쓴 실제 설정 (run_experiment.py와 같은 규칙)."""
+    top = {**base, **{k: v for k, v in options.items() if k in TOP_OPTIONS}}
+    train = {**(base.get("train") or {}), **{k: v for k, v in options.items() if k not in TOP_OPTIONS}}
+    return {**_typed(top, TOP_TYPES, BASE_CONFIG), "train": _typed(train, TRAIN_TYPES, f"{BASE_CONFIG} train")}
+
+
+def _flatten(config: dict) -> dict:
+    train = config.get("train") or {}
+    return {**{k: v for k, v in config.items() if k != "train"}, **{f"train.{k}": v for k, v in train.items()}}
+
+
+def _same(a, b) -> bool:
+    if all(isinstance(x, int) and not isinstance(x, bool) for x in (a, b)):
+        return a == b
+    numbers = all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in (a, b))
+    return math.isclose(a, b) if numbers else a == b
+
+
+def config_mismatches(saved: dict, expected: dict) -> list[str]:
+    """기존 config.yaml이 실제로 쓸 설정과 다른 항목들. 기존 쪽에만 있는 값(num_clients 등)은 보지 않는다."""
+    actual = _flatten(saved)
+    return [f"{key}: 지금 설정 {value}, 기존 {actual.get(key)}" for key, value in _flatten(expected).items()
+            if key not in actual or not _same(actual[key], value)]
+
+
+def run_status(out_dir: Path, expected: dict) -> str:
     """"new"(실행할 것), "done"(건너뜀). 건너뛸 수 없는 상태면 ValueError."""
     if not out_dir.exists():
         return "new"
@@ -84,21 +124,38 @@ def run_status(out_dir: Path, options: dict) -> str:
         raise ValueError(f"끊긴 실행입니다 (summary.json 없음): {out_dir}\n"
                          "  그 폴더를 지우거나 옮긴 뒤 다시 실행하세요.")
     config = yaml.safe_load((out_dir / "config.yaml").read_text(encoding="utf-8"))
-    mismatches = config_mismatches(config, options)
+    _check_mapping(config, str(out_dir / "config.yaml"))
+    mismatches = config_mismatches(config, expected)
     if mismatches:
         raise ValueError(f"같은 이름의 결과가 다른 설정입니다: {out_dir}\n  " + "\n  ".join(mismatches))
     return "done"
 
 
+def load_base(root: Path) -> dict:
+    """configs/base.yaml. run_experiment.py가 거부할 설정이면 기존 결과를 보기 전에 멈춘다."""
+    path = root / BASE_CONFIG
+    base = yaml.safe_load(path.read_text(encoding="utf-8"))
+    _check_mapping(base, str(path))
+    optimizer = (base.get("train") or {}).get("optimizer", "sgd")
+    if optimizer not in SUPPORTED_OPTIMIZERS:
+        raise ValueError(f"{path}: 지원하지 않는 옵티마이저입니다: {optimizer} (가능: {', '.join(SUPPORTED_OPTIMIZERS)})")
+    return base
+
+
 def run_sweep(runs: list[dict], root: Path, python: str, dry_run: bool = False) -> int:
     """하나씩 순서대로 실행. 모두 끝나면 0, 실패하면 1."""
+    try:
+        base = load_base(root)
+    except (OSError, yaml.YAMLError, ValueError) as e:
+        print(f"기본 설정을 읽지 못했습니다: {e}", flush=True)
+        return 1
     total = len(runs)
     for i, run in enumerate(runs, start=1):
         label = f"[{i}/{total}] {run['name']}"
         out_dir = root / "experiments" / SWEEP_DIR / run["name"]
         try:
-            status = run_status(out_dir, run["options"])
-        except (OSError, ValueError) as e:
+            status = run_status(out_dir, expected_config(base, run["options"]))
+        except (OSError, yaml.YAMLError, ValueError) as e:
             print(f"{label} 멈춤: {e}", flush=True)
             return 1
         if status == "done":
