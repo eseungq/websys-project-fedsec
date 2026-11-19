@@ -16,8 +16,10 @@ pip install -e ".[test]"                              # 설치 (torch, torchvisi
 python -m pytest -q                                   # 테스트 (13개)
 python scripts/run_experiment.py --name baseline      # 실험 1회 (configs/base.yaml 그대로)
 python scripts/run_experiment.py --name lr0.02 --lr 0.02 --rounds 10   # 옵션으로 값 바꾸기
+python scripts/run_experiment.py --name final --evaluate-test         # 설정 확정 후에만 테스트셋 평가
 ```
 - 바꿀 수 있는 값: `--seed --rounds --lr --momentum --weight-decay --local-ep --local-bs`
+- 공식 테스트셋은 `--evaluate-test`를 줄 때만 평가합니다. 설정 비교는 검증 정확도로 합니다.
 - 결과: `experiments/<name>/` (`--name sweep/abc`처럼 하위 폴더도 가능)
 - 데이터(`data/`)와 공용 분할 파일(`configs/splits/iid_seed0.json`)은 레포 루트 것을 씁니다.
 - Kaggle 실행, 결과 파일 설명: [`scripts/README.md`](scripts/README.md)

@@ -2,6 +2,7 @@
 
 예) python scripts/run_experiment.py --name baseline
     python scripts/run_experiment.py --name lr0.05 --lr 0.05 --rounds 10
+    python scripts/run_experiment.py --name final --evaluate-test     # 설정 확정 후에만 테스트셋 평가
 결과: members/이승규/experiments/<name>/ 에 config.yaml, env.json, rounds.csv, clients.csv, summary.json
 """
 
@@ -29,6 +30,8 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, dest="weight_decay")
     parser.add_argument("--local-ep", type=int, dest="local_ep")
     parser.add_argument("--local-bs", type=int, dest="local_bs")
+    parser.add_argument("--evaluate-test", action="store_true",
+                        help="마지막에 공식 테스트셋도 평가 (설정 확정 후에만. 설정 비교는 검증 정확도로)")
     args = parser.parse_args()
 
     out_dir = MEMBER_ROOT / "experiments" / args.name
@@ -37,7 +40,7 @@ def main() -> None:
 
     overrides = {k: getattr(args, k) for k in ("seed", "rounds", "lr", "momentum", "weight_decay", "local_ep", "local_bs")}
     cfg = load_config(MEMBER_ROOT / args.config).with_overrides(**overrides)
-    summary = run_fedavg(cfg, out_dir, repo_root=REPO_ROOT)
+    summary = run_fedavg(cfg, out_dir, repo_root=REPO_ROOT, evaluate_test=args.evaluate_test)
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
 

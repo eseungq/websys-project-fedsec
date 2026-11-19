@@ -1,14 +1,13 @@
 """결과 폴더 여러 개를 비교표(Markdown, CSV)로 만든다. 표준 라이브러리 + PyYAML만 쓴다.
 
-예) python tools/summarize.py experiments/sweep/*
+예) python tools/summarize.py experiments/sweep/[!_]*     # _tables(결과 표 폴더)는 빼고
     python tools/summarize.py experiments/lr*_r50 --epochs 50 --md out.md --csv out.csv
-행은 last5_val(선택 기준) 높은 순. final_test는 기록용이며 고르는 데 쓰지 않는다.
+행은 last5_val(선택 기준) 높은 순. 테스트 정확도는 설정 선택에 쓰지 않으므로 표에 넣지 않는다.
 """
 
 import argparse
 import csv
 import io
-import json
 import statistics
 import sys
 from pathlib import Path
@@ -18,9 +17,9 @@ import yaml
 LAST_N = 5                 # last5_val: 마지막 5라운드 검증 정확도 평균
 PLATEAU_WINDOW = 10        # plateau 기준: 마지막 10라운드 평균
 PLATEAU_MARGIN = 0.005     # 그 평균 − 0.5%p 이상이 되는 첫 라운드
-DEFAULT_EPOCHS = 50        # 같은 계산량 비교: epochs_seen = round × local_ep
+DEFAULT_EPOCHS = 50        # 같은 데이터 통과 횟수 비교: epochs_seen = round × local_ep
 
-ACC_KEYS = ("last5_val", "best_val", "final_test")
+ACC_KEYS = ("last5_val", "best_val")
 
 
 def last_mean(rounds: list[dict], key: str, n: int) -> float:
@@ -66,7 +65,7 @@ def val_at_epochs(rounds: list[dict], local_ep: int, epochs: int) -> float | Non
     return next((r["val_acc"] for r in rounds if r["round"] == target), None)
 
 
-def summarize_run(rounds: list[dict], norms: list[float], config: dict, summary: dict, epochs: int) -> dict:
+def summarize_run(rounds: list[dict], norms: list[float], config: dict, epochs: int) -> dict:
     if not rounds:
         raise ValueError("rounds.csv에 라운드가 없습니다.")
     train = config["train"]
@@ -86,7 +85,6 @@ def summarize_run(rounds: list[dict], norms: list[float], config: dict, summary:
         "best_round": best_round,
         "plateau_round": plateau_round(rounds),
         "min_val_loss_round": min_val_loss_round(rounds),
-        "final_test": summary["final_test_acc"],
         "norm_median": norm_median,
         "norm_p90": norm_p90,
         "norm_max": norm_max,
@@ -110,8 +108,7 @@ def load_run(run_dir: Path, epochs: int) -> dict:
     rounds = [{**r, "round": int(r["round"])} for r in _read_csv(run_dir / "rounds.csv")]
     norms = [r["update_norm"] for r in _read_csv(run_dir / "clients.csv")]
     config = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8"))
-    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-    return {"name": run_dir.name, **summarize_run(rounds, norms, config, summary, epochs)}
+    return {"name": run_dir.name, **summarize_run(rounds, norms, config, epochs)}
 
 
 def _format_cell(key: str, value) -> str:
@@ -150,7 +147,7 @@ def to_csv(rows: list[dict]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("run_dirs", nargs="+", type=Path, help="결과 폴더 (experiments/<name>)")
-    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS, help="같은 계산량 비교 기준 epochs_seen")
+    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS, help="같은 데이터 통과 횟수 비교 기준 epochs_seen")
     parser.add_argument("--md", type=Path, help="Markdown 표 저장 경로 (없으면 화면에만 출력)")
     parser.add_argument("--csv", type=Path, help="CSV 저장 경로")
     args = parser.parse_args()

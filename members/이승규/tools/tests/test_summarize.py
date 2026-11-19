@@ -120,14 +120,14 @@ def test_summarize_run_collects_all_columns():
     rounds = make_rounds([0.30, 0.60, 0.70, 0.74] + [0.75] * 8,
                          val_losses=[2.0, 1.0, 0.8, 0.7] + [0.75] * 8, times=[5.0] + [2.0] * 11)
 
-    row = summarize_run(rounds, [1.0, 2.0, 3.0], CONFIG, {"final_test_acc": 0.74}, epochs=10)
+    row = summarize_run(rounds, [1.0, 2.0, 3.0], CONFIG, epochs=10)
 
     assert row["lr"] == 0.01 and row["local_bs"] == 32 and row["rounds"] == 12
     assert row["last5_val"] == pytest.approx(0.75)
     assert (row["best_val"], row["best_round"]) == (0.75, 5)
     assert row["plateau_round"] == 4
     assert row["min_val_loss_round"] == 4
-    assert row["final_test"] == 0.74
+    assert "final_test" not in row                       # 테스트 정확도는 선택표에 넣지 않음
     assert row["norm_max"] == 3.0
     assert (row["round_sec"], row["total_sec"]) == (pytest.approx(2.0), pytest.approx(27.0))
     assert row["val_ep10"] == 0.75
@@ -135,7 +135,7 @@ def test_summarize_run_collects_all_columns():
 
 def test_summarize_run_rejects_empty_rounds():
     with pytest.raises(ValueError):
-        summarize_run([], [1.0, 2.0], CONFIG, {"final_test_acc": 0.5}, epochs=50)
+        summarize_run([], [1.0, 2.0], CONFIG, epochs=50)
 
 
 def write_run(run_dir, with_summary=True):
@@ -149,7 +149,7 @@ def write_run(run_dir, with_summary=True):
         "round,client,num_samples,train_loss,update_norm\n"
         "1,0,4500,2.0,1.0\n1,1,4500,2.0,2.0\n2,0,4500,1.5,3.0\n2,1,4500,1.5,4.0\n", encoding="utf-8")
     if with_summary:
-        (run_dir / "summary.json").write_text(json.dumps({"final_test_acc": 0.49}), encoding="utf-8")
+        (run_dir / "summary.json").write_text(json.dumps({"final_val_acc": 0.49}), encoding="utf-8")
 
 
 def test_load_run_reads_result_folder(tmp_path):

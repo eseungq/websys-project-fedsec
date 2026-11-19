@@ -31,9 +31,11 @@ runs:
 ## summarize.py
 ```bash
 python tools/summarize.py experiments/lr*_r50 experiments/sweep/m0.5_*
-python tools/summarize.py experiments/sweep/* --epochs 50 --md s1.md --csv s1.csv
+python tools/summarize.py experiments/sweep/[!_]* --epochs 50 --md all.md --csv all.csv   # _tables 폴더는 빼고
 ```
-행은 `last5_val` 높은 순. Markdown은 정확도를 %로, CSV는 원래 값(0~1)으로 씁니다.
+행은 `last5_val` 높은 순. Markdown은 정확도를 %로, CSV는 원래 값(0~1)으로 씁니다. 인자에는 실행 결과 폴더만 넘깁니다(`summary.json` 없는 폴더는 오류).
+
+테스트 정확도는 설정 선택에 쓰지 않으므로 표에 넣지 않습니다. (`experiments/sweep/_tables/`의 표는 이 변경 전에 만들어 `final_test` 열이 남아 있습니다.)
 
 | 열 | 뜻 |
 |---|---|
@@ -42,10 +44,9 @@ python tools/summarize.py experiments/sweep/* --epochs 50 --md s1.md --csv s1.cs
 | `best_val`, `best_round` | 최고 검증 정확도와 그 라운드(같으면 먼저 나온 라운드) |
 | `plateau_round` | 검증 정확도가 "마지막 10라운드 평균 − 0.5%p" 이상이 되는 첫 라운드 |
 | `min_val_loss_round` | 검증 손실이 가장 낮은 라운드 (과적합 시작 신호) |
-| `final_test` | 최종 테스트 정확도. 기록용, 고르는 데 쓰지 않음 |
 | `norm_median`, `norm_p90`, `norm_max` | 전체 라운드 × 클라이언트 업데이트 노름의 중앙값, 90%(선형 보간), 최대 |
 | `round_sec`, `total_sec` | 2라운드부터 평균 라운드 시간, 총 시간 (`rounds.csv`의 `total_sec`, 검증 포함) |
-| `val_ep<N>` | `epochs_seen = round × local_ep`가 N(`--epochs`, 기본 50)인 라운드의 검증 정확도. 그 라운드가 없으면 `—` |
+| `val_ep<N>` | `epochs_seen = round × local_ep`가 N(`--epochs`, 기본 50)인 라운드의 검증 정확도. 그 라운드가 없으면 `—`. 같은 데이터 통과 횟수 비교이며, local_bs가 다르면 SGD 스텝 수는 다름 |
 
 ## 테스트
 ```bash

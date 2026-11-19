@@ -20,7 +20,8 @@ def _clone_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
     return {key: value.detach().clone() for key, value in model.state_dict().items()}
 
 
-def run_fedavg(cfg: ExperimentConfig, out_dir: Path, repo_root: Path) -> dict:
+def run_fedavg(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, evaluate_test: bool = False) -> dict:
+    """공식 테스트셋은 evaluate_test=True일 때만 평가한다 (설정을 확정한 뒤 한 번)."""
     set_seed(cfg.seed)
     device = pick_device()
     train_all, test = load_cifar10(repo_root / cfg.data_root, device)
@@ -72,17 +73,17 @@ def run_fedavg(cfg: ExperimentConfig, out_dir: Path, repo_root: Path) -> dict:
         round_times.append(row["total_sec"])
         print(" ".join(f"{k}={v}" for k, v in row.items()))
 
-    model.load_state_dict(global_state)
-    test_loss, test_acc = evaluate(model, test, cfg.eval_bs)
     later = round_times[1:] or round_times
     summary = {
         "final_val_acc": row["val_acc"],
-        "final_test_acc": round(test_acc, 4),
-        "final_test_loss": round(test_loss, 4),
         "first_round_sec": round_times[0],
         "mean_round_sec_after_first": round(sum(later) / len(later), 3),
         "total_sec": round(sum(round_times), 1),
     }
+    if evaluate_test:
+        model.load_state_dict(global_state)
+        test_loss, test_acc = evaluate(model, test, cfg.eval_bs)
+        summary = {**summary, "final_test_acc": round(test_acc, 4), "final_test_loss": round(test_loss, 4)}
     log.write_summary(summary)
     (out_dir / "models").mkdir(exist_ok=True)
     torch.save(global_state, out_dir / "models" / "final_model.pt")

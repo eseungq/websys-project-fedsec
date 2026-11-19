@@ -17,6 +17,7 @@ cd members/이승규
 python scripts/run_experiment.py --name baseline                 # configs/base.yaml 그대로
 python scripts/run_experiment.py --name lr0.05 --lr 0.05         # 학습률만 변경
 python scripts/run_experiment.py --name ep2 --local-ep 2 --rounds 10
+python scripts/run_experiment.py --name final --evaluate-test  # 설정 확정 후에만 테스트셋 평가
 ```
 바꿀 수 있는 값: `--seed --rounds --lr --momentum --weight-decay --local-ep --local-bs`
 
@@ -24,9 +25,9 @@ python scripts/run_experiment.py --name ep2 --local-ep 2 --rounds 10
 - `config.yaml` 실제로 쓴 전체 설정, `env.json` 기기·버전·**커밋 ID**
 - `rounds.csv` 라운드별 학습 손실, 검증 손실·정확도, 업데이트 노름(최소·평균·최대), 학습 시간(`train_sec`), 검증 포함 시간(`total_sec`)
 - `clients.csv` 라운드 × 클라이언트별 표본 수, 학습 손실, 업데이트 노름 (클리핑 상한 정할 때 사용)
-- `summary.json` 최종 검증·테스트 정확도, 첫 라운드 시간, 이후 평균 시간
+- `summary.json` 최종 검증 정확도, 첫 라운드 시간, 이후 평균 시간. `--evaluate-test`를 준 실행에만 테스트 정확도·손실(`final_test_acc`, `final_test_loss`)
 
-> 공식 테스트셋은 마지막에 한 번만 평가합니다. 설정 비교는 **검증 정확도**로 하세요.
+> 공식 테스트셋은 기본으로 평가하지 않습니다. 설정 비교는 **검증 정확도**로 하고, 설정을 확정한 뒤에만 `--evaluate-test`로 한 번 평가하세요.
 
 ## Kaggle에서 실행
 노트북 설정: Accelerator **GPU T4 x2**(또는 P100), Internet **On**(휴대폰 인증 필요).
