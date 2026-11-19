@@ -41,7 +41,7 @@ python scripts/run_server_experiment.py --name server_demo --rounds 3
 python scripts/serve.py --port 8765 --log-dir experiments/demo_server          # 터미널 1 (서버 기록 폴더는 결과 폴더와 다른 이름)
 python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   # 터미널 2
 ```
-- 결과 폴더에는 클라이언트 쪽 로그와 `server_status.json`(라운드·제외 기록), 서버 쪽 `server/`(`server_rounds.csv`, `exclusions.csv`, `server.log`)가 남는다
+- 결과 폴더에는 클라이언트 쪽 로그와 `server_status.json`(라운드·제외 기록 전체, 커밋 안 함), 서버 쪽 `server/`(`server_rounds.csv`, `exclusions.csv`, `server.log`)가 남는다
 
 | 코드 | 역할 |
 |---|---|
