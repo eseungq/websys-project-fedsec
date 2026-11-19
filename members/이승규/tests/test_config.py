@@ -77,3 +77,11 @@ def test_seed_outside_supported_range_is_rejected(tmp_path, value):
 def test_load_config_rejects_unknown_missing_or_bad_values(tmp_path, text):
     with pytest.raises(ValueError):
         load_config(write_base(tmp_path, text))
+
+
+@pytest.mark.parametrize("value", ["'1_0'", "'0x10'", "' 1 0 '"])
+def test_integer_text_with_separators_is_rejected(tmp_path, value):
+    path = write_base(tmp_path, BASE_TEXT.replace("local_ep: 1", f"local_ep: {value}"))
+
+    with pytest.raises(ValueError):
+        load_config(path)

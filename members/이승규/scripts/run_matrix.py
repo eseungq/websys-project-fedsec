@@ -13,6 +13,7 @@
 - 끊긴 실행(summary.json 없음, 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님, rounds.csv·clients.csv 줄 수가
   라운드 수와 맞지 않음, class_acc.csv·client_acc.csv가 비었음, env.json을 읽을 수 없음)이 있으면 시작 전에 멈춘다
   → 그 폴더를 지우거나 옮긴 뒤 다시 실행
+- 학습이 발산한 실행은 발산 전 전역 모델로 평가해 끝난 실행으로 친다 (summary.json의 diverged_round)
 - 실행이 실패하면 그 자리에서 멈춘다
 """
 
@@ -47,7 +48,8 @@ NUM_CLIENTS = DEFAULT_NUM_CLIENTS
 RUN_ENV_KEYS = ("device", "gpu", "torch", "commit", "dirty")
 # 클래스별·클라이언트별 비교에 쓰는 로그. 비어 있으면 끝난 실행으로 치지 않음
 REQUIRED_LOGS = ("class_acc.csv", "client_acc.csv")
-SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "rounds_not_updated", "total_virtual_time", "total_sec")
+SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "diverged_round", "rounds_not_updated", "total_virtual_time",
+                "total_sec")
 # 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
 REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
 
@@ -183,7 +185,11 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     mismatches = config_mismatches(saved, expected)
     if mismatches:
         return "stale", mismatches
-    problems = output_problems(out_dir, expected["rounds"])
+    diverged = summary.get("diverged_round")
+    if diverged is not None and (type(diverged) is not int or not 2 <= diverged <= expected["rounds"]):
+        return "incomplete", [f"summary.json의 diverged_round가 2~{expected['rounds']} 사이 정수가 아님: {diverged!r}"]
+    # 발산한 실행은 발산 전 라운드까지만 로그가 있다 (program.run_clients)
+    problems = output_problems(out_dir, expected["rounds"] if diverged is None else diverged - 1)
     return ("incomplete", problems) if problems else ("done", [])
 
 

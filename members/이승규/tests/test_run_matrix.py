@@ -224,3 +224,25 @@ def test_index_records_device_and_versions(tmp_path):
 
     assert (row["device"], row["gpu"], row["torch"], row["commit"], row["dirty"]) == ("cuda", "Tesla T4", "2.15.0",
                                                                                      "abc", False)
+
+
+def test_diverged_run_counts_rounds_until_divergence(tmp_path):
+    run = plan_runs(["baseline"], ["attack"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    summary = json.dumps({**json.loads(SUMMARY), "diverged_round": 13, "rounds_completed": 12})
+    write_result(tmp_path / run.name, saved_config(expected), summary, rounds_logged=12,
+                 clients_logged=12 * NUM_CLIENTS)
+
+    assert run_status(tmp_path / run.name, expected) == ("done", [])
+    assert index_rows(tmp_path, [run], {run: "done"})[0]["diverged_round"] == 13
+
+
+@pytest.mark.parametrize("value", [1, 41, "13", True])
+def test_diverged_round_outside_rounds_is_incomplete(tmp_path, value):
+    run = plan_runs(["baseline"], ["attack"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps({**json.loads(SUMMARY), "diverged_round": value}))
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and problems[0].startswith("summary.json의 diverged_round가")

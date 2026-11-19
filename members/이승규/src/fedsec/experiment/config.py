@@ -1,6 +1,7 @@
 """실험 설정 파일(YAML)을 읽고 값이 올바른지 확인한다."""
 
 import math
+import re
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -52,6 +53,9 @@ def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
+INT_TEXT = re.compile(r"[+-]?[0-9]+")
+
+
 def whole_number(value) -> int:
     """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (int()는 조용히 버림). true/false도 거부."""
     if isinstance(value, bool):
@@ -59,10 +63,11 @@ def whole_number(value) -> int:
     if isinstance(value, int):
         return value  # float를 거치면 2**53보다 큰 값이 바뀌므로 그대로 돌려준다
     if isinstance(value, str):
-        try:
-            return int(value.strip())
-        except ValueError:
-            pass  # "1.0" 같은 문자열은 아래에서 소수 부분을 확인한다
+        if INT_TEXT.fullmatch(value.strip()):
+            return int(value)   # int()는 "1_0"도 10으로 받으므로 숫자만 있는지 먼저 본다
+        if "_" in value:   # float()도 "1_0"을 10.0으로 받는다
+            raise ValueError(f"정수여야 합니다: {value!r}")
+        # "1.0" 같은 문자열은 아래에서 소수 부분을 확인한다
     number = float(value)
     if not number.is_integer():
         raise ValueError(f"정수여야 합니다: {value!r}")

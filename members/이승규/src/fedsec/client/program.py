@@ -363,10 +363,21 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
     snapshot = fetch_snapshot(api, device, expected_round=1)
     save_state(snapshot.state, checkpoint_path(out_dir, 0))
     rows = []
+    diverged_round = None
     for _ in range(cfg.rounds):
         round_idx = snapshot.round
-        row, rows_by_client, snapshot, val_eval = run_round(api, model, snapshot, clients, val, cfg, plan,
-                                                            status["min_accepted"], device)
+        try:
+            row, rows_by_client, next_snapshot, val_eval = run_round(api, model, snapshot, clients, val, cfg, plan,
+                                                                     status["min_accepted"], device)
+        except FloatingPointError as error:
+            if not rows:
+                raise   # 초기 모델에서 바로 발산하면 공격 결과가 아니라 설정 문제
+            # 로컬 학습은 제출 전에 끝나므로 이 라운드의 서버 상태는 그대로다. 발산 전 전역 모델로 결과를 남긴다
+            diverged_round = round_idx
+            print(f"라운드 {round_idx}에서 발산 ({error}) → 라운드 {round_idx - 1}의 전역 모델로 평가하고 끝냄")
+            save_state(snapshot.state, checkpoint_path(out_dir, round_idx - 1))
+            break
+        snapshot = next_snapshot
         log.log_round(row)
         log.log_clients(rows_by_client)
         log.log_class_acc(class_rows(round_idx, "val", val_eval))
@@ -378,13 +389,14 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
 
     (out_dir / "server_status.json").write_text(json.dumps(api.status(), indent=2, ensure_ascii=False), encoding="utf-8")
     summary = {**_summary(rows), "experiment": plan.experiment_id, "env": plan.env_name, "attack": plan.attack,
-               "aggregator": rows[-1]["aggregator"], "seed": cfg.seed}
+               "aggregator": rows[-1]["aggregator"], "seed": cfg.seed,
+               "diverged_round": diverged_round, "rounds_completed": len(rows)}
     if evaluate_test:
         model.load_state_dict(snapshot.state)
         test_eval = evaluate_detailed(model, test, cfg.eval_bs)
         summary = {**summary, "final_test_acc": round(test_eval.acc, 4), "final_test_loss": round(test_eval.loss, 4)}
-        log.log_class_acc(class_rows(cfg.rounds, "test", test_eval))
-        log.log_client_acc(client_acc_rows(cfg.rounds, "test", test_eval, distributions))
+        log.log_class_acc(class_rows(len(rows), "test", test_eval))
+        log.log_client_acc(client_acc_rows(len(rows), "test", test_eval, distributions))
     save_state(snapshot.state, out_dir / "models" / "final_model.pt")
     log.write_summary(summary)   # 마지막에 쓴다: summary.json이 있으면 실행이 끝까지 간 것 (run_matrix 완료 판정)
     return summary

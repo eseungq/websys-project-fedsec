@@ -30,6 +30,16 @@ python scripts/run_experiment.py --name final --evaluate-test  # 설정 확정 �
 - `summary.json` 최종 검증 정확도, 첫 라운드 시간, 이후 평균 시간. `--evaluate-test`를 준 실행에만 테스트 정확도·손실(`final_test_acc`, `final_test_loss`)
 - 서버를 거친 실행(`run_server_experiment.py`, `run_clients.py`, `run_matrix.py`)만: `class_acc.csv` 라운드 × 클래스 검증 정확도, `client_acc.csv` 라운드 × 클라이언트의 분포 가중 정확도(Σ 클래스 비율 × 클래스 정확도), `models/round_XXX.pt` 라운드 0·5의 배수·마지막 라운드의 전역 모델(간격 `--save-every`). `--evaluate-test`면 두 CSV에 테스트셋 줄(`split=test`) 추가
 
+- 서버를 거친 실행은 `summary.json`에 `diverged_round`, `rounds_completed`도 남깁니다. 로컬 학습 손실이 NaN이 되면(발산) 그 라운드는 제출하지 않고 끝내며, 발산 전 전역 모델로 최종 정확도를 계산하고 그 모델을 `models/round_XXX.pt`로 저장합니다. 첫 라운드부터 발산하면 설정 문제로 보고 멈춥니다
+- `summary.json`은 모델 저장 뒤 **마지막에** 씁니다. 이 파일이 있으면 실행이 끝까지 간 것입니다
+- DLG(`run_dlg.py`)는 `<name>.partial/`에 쓰고 끝나면 `<name>/`으로 이름을 바꿉니다. 실패해서 `.partial`이 남으면 같은 `--name`으로 다시 실행되지 않으니 지우고 다시 실행하세요
+- 결과 폴더 이름(`--name`, `--prefix`)은 `experiments/` 아래만 됩니다(`../`, 절대 경로 거부). 서버 기록 폴더에 이전 기록이 있으면 섞이지 않게 멈춥니다
+
+**`run_matrix.py`의 완료 판정과 `runs.csv`** (`experiments/<prefix>/runs.csv`)
+- 끝난 실행: `summary.json`의 검증·테스트 정확도가 0\~1, 저장된 설정이 지금 설정과 같음, `rounds.csv`가 라운드 수(발산했으면 발산 전까지)만큼, `clients.csv`가 그 × 10줄, `class_acc.csv`·`client_acc.csv`가 비어 있지 않음, `env.json`이 읽힘. `models/`는 커밋하지 않으므로 보지 않습니다
+- 설정이 다르면 `stale`, 산출물이 덜 쓰였으면 `incomplete`로 표시하고 시작 전에 멈춥니다(사유 출력)
+- 열: 실행 이름·환경·공격·집계·시드·상태, `final_val_acc`, `final_test_acc`, `diverged_round`, `rounds_not_updated`, `total_virtual_time`, `total_sec`, 실행 환경 `device`·`gpu`(GPU 모델명)·`torch`·`commit`·`dirty`(추적 중인 파일이 수정됐는지)
+
 > 공식 테스트셋은 기본으로 평가하지 않습니다. 설정 비교는 **검증 정확도**로 하고, 설정을 확정한 뒤에만 `--evaluate-test`로 한 번 평가하세요.
 
 ## Kaggle에서 실행

@@ -132,3 +132,54 @@ def test_run_clients_writes_metrics_and_checkpoints(tmp_path, monkeypatch):
 def test_run_clients_rejects_negative_save_every(tmp_path):
     with pytest.raises(ValueError):
         run_clients(CFG, tmp_path, repo_root=tmp_path, server_url="unused", plan=None, save_every=-1)
+
+
+def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None):
+    """run_clients를 Flask 테스트 클라이언트로 돌린다. diverge_at 라운드의 로컬 학습에서 발산(FloatingPointError)."""
+    env = _env("baseline")
+    cfg = replace(CFG, rounds=rounds)
+    policy = scenario_policy(env, build_defense(AD), SEED, NUM_CLIENTS)
+    defense = {key: value for key, value in AD.to_dict().items() if not key.startswith("attack")}
+    state = ServerState(initial_global_state(SEED, cfg.model), num_clients=NUM_CLIENTS, policy=policy,
+                        config={"seed": SEED, "model": cfg.model, "env": env.name, "per_round": env.per_round,
+                                "deadline": env.timing.deadline, **defense})
+    api = FlaskApi(create_app(state).test_client())
+    monkeypatch.setattr(program, "ServerApi", lambda url: api)
+    monkeypatch.setattr(program, "_load_data", lambda cfg, root, device: (VAL, CLIENTS, VAL))
+    monkeypatch.setattr(program, "pick_device", lambda: torch.device("cpu"))
+    original = program.local_update
+
+    def local_update(model, state, data, train, generator):
+        if api.status()["round"] == diverge_at:
+            raise FloatingPointError("로컬 학습 손실이 nan입니다 (발산).")
+        return original(model, state, data, train, generator)
+
+    monkeypatch.setattr(program, "local_update", local_update)
+    plan = client_plan("metrics", env, AD, SEED, NUM_CLIENTS)
+    return run_clients(cfg, tmp_path, repo_root=tmp_path, server_url="unused", plan=plan, evaluate_test=True)
+
+
+def test_divergence_ends_run_with_last_global_model(tmp_path, monkeypatch):
+    # 공격 + FedAvg는 실제로 13라운드에 발산했다. 실행 전체가 멈추지 않고 발산 전 모델로 결과를 남긴다
+    summary = _metrics_run(tmp_path, monkeypatch, rounds=3, diverge_at=2)
+
+    assert (summary["diverged_round"], summary["rounds_completed"]) == (2, 1)
+    assert 0 <= summary["final_test_acc"] <= 1
+    with (tmp_path / "rounds.csv").open(encoding="utf-8") as f:
+        assert [row["round"] for row in csv.DictReader(f)] == ["1"]
+    final = torch.load(tmp_path / "models" / "final_model.pt", weights_only=True)
+    after_round_1 = torch.load(checkpoint_path(tmp_path, 1), weights_only=True)
+    assert all(torch.equal(final[k], after_round_1[k]) for k in final)
+    assert json.loads((tmp_path / "summary.json").read_text())["diverged_round"] == 2
+
+
+def test_run_without_divergence_records_none(tmp_path, monkeypatch):
+    summary = _metrics_run(tmp_path, monkeypatch, rounds=2)
+
+    assert (summary["diverged_round"], summary["rounds_completed"]) == (None, 2)
+
+
+def test_divergence_from_initial_model_still_stops(tmp_path, monkeypatch):
+    # 첫 라운드부터 발산하면 공격 결과가 아니라 설정 문제이므로 그대로 멈춘다
+    with pytest.raises(FloatingPointError):
+        _metrics_run(tmp_path, monkeypatch, rounds=2, diverge_at=1)

@@ -283,3 +283,9 @@ def test_run_sweep_stops_when_base_misses_required_key_before_reusing_result(roo
 
     assert result == 1
     assert "필수 항목이 없습니다: weight_decay" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("value", ["1_0", "0x10"])
+def test_expected_config_rejects_integer_text_with_separators(value):
+    with pytest.raises(ValueError):
+        expected_config({**BASE, "train": {**BASE["train"], "local_ep": value}}, {})
