@@ -1,0 +1,3 @@
+name,lr,momentum,weight_decay,local_ep,local_bs,seed,rounds,last5_val,best_val,best_round,plateau_round,min_val_loss_round,final_test,norm_median,norm_p90,norm_max,round_sec,total_sec,val_ep50
+wd5e-4,0.01,0.9,0.0005,1,32,0,50,0.76376,0.7666,46,31,34,0.7584,2.88835,3.70917,4.118,3.666265,183.782,0.7616
+lr0.01_r50,0.01,0.9,0.0,1,32,0,50,0.75584,0.7606,45,28,31,0.7528,3.05475,3.92421,4.525,3.847531,192.674,0.754

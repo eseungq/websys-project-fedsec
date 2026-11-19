@@ -1,0 +1,13 @@
+seed: 2
+split: configs/splits/iid_seed0.json
+data_root: data
+rounds: 50
+model: simple_cnn
+train:
+  lr: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  local_ep: 1
+  local_bs: 32
+eval_bs: 1000
+num_clients: 10

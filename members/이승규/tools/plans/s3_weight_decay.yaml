@@ -1,0 +1,5 @@
+# S3. weight_decay 0 vs 5e-4 (S2까지 선택: momentum 0.9, lr 0.01, local_ep 1, local_bs 32)
+# weight_decay 0은 experiments/lr0.01_r50 결과를 재사용
+common: {seed: 0, rounds: 50, momentum: 0.9, lr: 0.01, local_ep: 1, local_bs: 32}
+runs:
+  - {name: wd5e-4, weight_decay: 0.0005}

@@ -1,0 +1,5 @@
+# pyproject.toml의 dependencies + test와 같게 유지 (설치는 pip install -e ".[test]")
+torch>=2.1
+torchvision>=0.16
+pyyaml>=6.0
+pytest>=7.0

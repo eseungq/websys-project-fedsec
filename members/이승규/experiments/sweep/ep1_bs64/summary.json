@@ -1,0 +1,8 @@
+{
+  "final_val_acc": 0.7496,
+  "final_test_acc": 0.7496,
+  "final_test_loss": 0.7546,
+  "first_round_sec": 3.618,
+  "mean_round_sec_after_first": 2.883,
+  "total_sec": 144.9
+}

@@ -1,0 +1,9 @@
+# S2. local_ep × local_bs (S1 선택: momentum 0.9, lr 0.01)
+# ep1·bs32는 기존 기준과 같으므로 experiments/lr0.01_r50 결과를 재사용
+common: {seed: 0, rounds: 50, momentum: 0.9, lr: 0.01}
+runs:
+  - {name: ep1_bs64, local_ep: 1, local_bs: 64}
+  - {name: ep2_bs32, local_ep: 2, local_bs: 32}
+  - {name: ep2_bs64, local_ep: 2, local_bs: 64}
+  - {name: ep3_bs32, local_ep: 3, local_bs: 32}
+  - {name: ep3_bs64, local_ep: 3, local_bs: 64}
