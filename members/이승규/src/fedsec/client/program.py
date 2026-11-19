@@ -3,6 +3,7 @@
 라운드마다: GET /model → 참여자를 ID 순으로 local_update (전원 학습)
 → 공격을 켰으면 악성 참여자의 업데이트를 공모 벡터로 바꿈 → 가상 완료 시각을 붙여 전원 POST /update
 → POST /aggregate → GET /model(갱신된 전역 모델)로 검증 정확도 평가. 이 모델이 다음 라운드의 시작점이다.
+검증 평가는 전체·클래스별·클라이언트별(분포 가중) 정확도를 남기고, 전역 모델은 save_every 라운드마다 저장한다.
 초기 모델은 서버가 만들고(시드 고정) 클라이언트는 받기만 한다.
 
 악성·지연 ID와 공격 여부는 클라이언트 프로그램만 안다(ClientPlan). 서버에는 넘기지 않는다.
@@ -25,13 +26,15 @@ from fedsec.environments.config import EnvConfig
 from fedsec.environments.schedule import delayed_clients, malicious_clients
 from fedsec.environments.virtual_time import VirtualTiming, round_elapsed, virtual_finish_times
 from fedsec.experiment.config import AttackDefenseConfig, ExperimentConfig
-from fedsec.experiment.evaluate import evaluate
+from fedsec.experiment.evaluate import Evaluation, evaluate_detailed
+from fedsec.experiment.metrics import class_rows, client_acc_rows, label_distribution
 from fedsec.experiment.runtime import client_generator, environment_info, pick_device, set_seed, timed_now
 from fedsec.logger.run_log import RunLog
 from fedsec.models.cnn import build_model
 from fedsec.server.serialization import State, decode_state, encode_state
 
 REQUEST_TIMEOUT_SEC = 120
+DEFAULT_SAVE_EVERY = 5      # 전역 모델 저장 간격 (라운드). 0이면 라운드 0·마지막만
 # 서버 /status의 config와 맞춰 볼 방어 설정 항목
 DEFENSE_KEYS = ("aggregator", "clip_norm", "clip_before_median")
 # 라운드마다 화면에 보여 줄 항목 (전체는 rounds.csv)
@@ -243,8 +246,8 @@ def round_row(snapshot: Snapshot, trained: dict[int, Trained], sent: dict[int, S
 
 def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, clients: list[TensorData],
               val: TensorData, cfg: ExperimentConfig, plan: ClientPlan, min_accepted: int,
-              device: torch.device) -> tuple[dict, list[dict], Snapshot]:
-    """라운드 1회. (rounds.csv 한 줄, clients.csv 줄들, 다음 라운드 스냅샷)."""
+              device: torch.device) -> tuple[dict, list[dict], Snapshot, Evaluation]:
+    """라운드 1회. (rounds.csv 한 줄, clients.csv 줄들, 다음 라운드 스냅샷, 갱신된 모델의 검증 평가)."""
     t_start = timed_now(device)
     trained = train_participants(model, snapshot, clients, cfg, device)
     normal = {cid: t.result.update for cid, t in trained.items()}
@@ -254,7 +257,7 @@ def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, client
     next_snapshot = fetch_snapshot(api, device, snapshot.round + 1)
     t_fetched = timed_now(device)
     model.load_state_dict(next_snapshot.state)
-    val_metrics = evaluate(model, val, cfg.eval_bs)
+    val_eval = evaluate_detailed(model, val, cfg.eval_bs)
     t_end = timed_now(device)
 
     excluded = {cid: s.reason for cid, s in sent.items() if not s.accepted}
@@ -265,8 +268,23 @@ def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, client
         "comm_sec": round(sum(s.comm_sec for s in sent.values()) + (t_fetched - t_aggregate), 3),
         "total_sec": round(t_end - t_start, 3),
     }
-    row = round_row(snapshot, trained, sent, decision, record, val_metrics, plan, seconds)
-    return row, client_rows(snapshot.round, len(clients), trained, sent, normal, record, plan), next_snapshot
+    row = round_row(snapshot, trained, sent, decision, record, (val_eval.loss, val_eval.acc), plan, seconds)
+    return row, client_rows(snapshot.round, len(clients), trained, sent, normal, record, plan), next_snapshot, val_eval
+
+
+def should_save(round_idx: int, rounds: int, save_every: int) -> bool:
+    """라운드 0(초기 모델), save_every의 배수, 마지막 라운드의 전역 모델을 저장한다."""
+    return round_idx in (0, rounds) or (save_every > 0 and round_idx % save_every == 0)
+
+
+def save_state(state: State, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({key: value.cpu() for key, value in state.items()}, path)
+
+
+def checkpoint_path(out_dir: Path, round_idx: int) -> Path:
+    """models/round_005.pt = 라운드 5 집계 후 전역 모델 (= 라운드 6 시작 모델)."""
+    return out_dir / "models" / f"round_{round_idx:03d}.pt"
 
 
 def _load_data(cfg: ExperimentConfig, repo_root: Path, device: torch.device):
@@ -279,11 +297,14 @@ def _load_data(cfg: ExperimentConfig, repo_root: Path, device: torch.device):
 
 
 def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_url: str, plan: ClientPlan,
-                evaluate_test: bool = False) -> dict:
-    """결과 폴더 형식은 run_fedavg와 같고, 서버 기록(server_status.json)을 더 남긴다.
+                evaluate_test: bool = False, save_every: int = DEFAULT_SAVE_EVERY) -> dict:
+    """결과 폴더 형식은 run_fedavg와 같고, 서버 기록(server_status.json), 클래스별(class_acc.csv)·
+    클라이언트별(client_acc.csv) 정확도, 라운드별 전역 모델(models/round_XXX.pt)을 더 남긴다.
 
     cfg.split은 환경의 분할 파일이어야 한다 (레이블 편향 환경은 다른 분할).
     """
+    if save_every < 0:
+        raise ValueError("save_every는 0 이상이어야 합니다.")
     set_seed(cfg.seed)
     device = pick_device()
     val, clients, test = _load_data(cfg, repo_root, device)
@@ -299,13 +320,20 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
     print(f"device={env['device']} gpu={env['gpu']} commit={env['commit'][:7]} clients={len(clients)} server={server_url} "
           f"env={plan.env_name} attack={plan.attack} malicious={list(plan.malicious)} delayed={list(plan.delayed)}")
 
+    distributions = [label_distribution(data.labels) for data in clients]
     snapshot = fetch_snapshot(api, device, expected_round=1)
+    save_state(snapshot.state, checkpoint_path(out_dir, 0))
     rows = []
     for _ in range(cfg.rounds):
-        row, rows_by_client, snapshot = run_round(api, model, snapshot, clients, val, cfg, plan,
-                                                  status["min_accepted"], device)
+        round_idx = snapshot.round
+        row, rows_by_client, snapshot, val_eval = run_round(api, model, snapshot, clients, val, cfg, plan,
+                                                            status["min_accepted"], device)
         log.log_round(row)
         log.log_clients(rows_by_client)
+        log.log_class_acc(class_rows(round_idx, "val", val_eval))
+        log.log_client_acc(client_acc_rows(round_idx, "val", val_eval, distributions))
+        if should_save(round_idx, cfg.rounds, save_every):
+            save_state(snapshot.state, checkpoint_path(out_dir, round_idx))
         rows.append(row)
         print(" ".join(f"{k}={row[k]}" for k in PRINT_KEYS))
 
@@ -314,11 +342,12 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
                "aggregator": rows[-1]["aggregator"], "seed": cfg.seed}
     if evaluate_test:
         model.load_state_dict(snapshot.state)
-        test_loss, test_acc = evaluate(model, test, cfg.eval_bs)
-        summary = {**summary, "final_test_acc": round(test_acc, 4), "final_test_loss": round(test_loss, 4)}
+        test_eval = evaluate_detailed(model, test, cfg.eval_bs)
+        summary = {**summary, "final_test_acc": round(test_eval.acc, 4), "final_test_loss": round(test_eval.loss, 4)}
+        log.log_class_acc(class_rows(cfg.rounds, "test", test_eval))
+        log.log_client_acc(client_acc_rows(cfg.rounds, "test", test_eval, distributions))
     log.write_summary(summary)
-    (out_dir / "models").mkdir(exist_ok=True)
-    torch.save({key: value.cpu() for key, value in snapshot.state.items()}, out_dir / "models" / "final_model.pt")
+    save_state(snapshot.state, out_dir / "models" / "final_model.pt")
     return summary
 
 

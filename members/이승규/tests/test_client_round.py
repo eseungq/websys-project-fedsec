@@ -82,7 +82,7 @@ def _round(env, attack_defense):
     api = FlaskApi(create_app(ServerState(start, num_clients=NUM_CLIENTS, policy=policy)).test_client())
     plan = client_plan("test", env, attack_defense, SEED, NUM_CLIENTS)
     snapshot = fetch_snapshot(api, CPU, expected_round=1)
-    row, rows, next_snapshot = run_round(api, build_model(CFG.model), snapshot, CLIENTS, VAL, CFG, plan,
+    row, rows, next_snapshot, _ = run_round(api, build_model(CFG.model), snapshot, CLIENTS, VAL, CFG, plan,
                                          env.min_accepted, CPU)
     return row, rows, next_snapshot, plan, start
 

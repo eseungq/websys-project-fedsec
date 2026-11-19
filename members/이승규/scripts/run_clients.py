@@ -13,7 +13,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from fedsec.client.program import ClientPlan, client_plan, run_clients
+from fedsec.client.program import DEFAULT_SAVE_EVERY, ClientPlan, client_plan, run_clients
 from fedsec.environments.config import EnvConfig, load_env_config
 from fedsec.experiment.config import (AGGREGATORS, AttackDefenseConfig, ExperimentConfig, load_attack_defense,
                                       load_config)
@@ -39,6 +39,8 @@ def add_experiment_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--local-bs", type=int, dest="local_bs")
     parser.add_argument("--evaluate-test", action="store_true",
                         help="마지막에 공식 테스트셋도 평가 (설정 확정 후에만. 설정 비교는 검증 정확도로)")
+    parser.add_argument("--save-every", type=int, default=DEFAULT_SAVE_EVERY, dest="save_every",
+                        help=f"전역 모델 저장 간격 (라운드, 기본 {DEFAULT_SAVE_EVERY}. 라운드 0·마지막은 항상 저장)")
 
 
 def add_scenario_args(parser: argparse.ArgumentParser) -> None:
@@ -99,7 +101,7 @@ def main() -> None:
     cfg, plan, _ = client_setup(args)
     out_dir = new_out_dir(args.name)
     summary = run_clients(cfg, out_dir, repo_root=REPO_ROOT, server_url=args.server_url, plan=plan,
-                          evaluate_test=args.evaluate_test)
+                          evaluate_test=args.evaluate_test, save_every=args.save_every)
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
 

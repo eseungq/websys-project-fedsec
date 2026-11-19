@@ -28,6 +28,7 @@ python scripts/run_experiment.py --name final --evaluate-test  # 설정 확정 �
 - `rounds.csv` 라운드별 학습 손실, 검증 손실·정확도, 업데이트 노름(최소·평균·최대), 학습 시간(`train_sec`), 검증 포함 시간(`total_sec`)
 - `clients.csv` 라운드 × 클라이언트별 표본 수, 학습 손실, 업데이트 노름 (클리핑 상한 정할 때 사용)
 - `summary.json` 최종 검증 정확도, 첫 라운드 시간, 이후 평균 시간. `--evaluate-test`를 준 실행에만 테스트 정확도·손실(`final_test_acc`, `final_test_loss`)
+- 서버를 거친 실행(`run_server_experiment.py`, `run_clients.py`, `run_matrix.py`)만: `class_acc.csv` 라운드 × 클래스 검증 정확도, `client_acc.csv` 라운드 × 클라이언트의 분포 가중 정확도(Σ 클래스 비율 × 클래스 정확도), `models/round_XXX.pt` 라운드 0·5의 배수·마지막 라운드의 전역 모델(간격 `--save-every`). `--evaluate-test`면 두 CSV에 테스트셋 줄(`split=test`) 추가
 
 > 공식 테스트셋은 기본으로 평가하지 않습니다. 설정 비교는 **검증 정확도**로 하고, 설정을 확정한 뒤에만 `--evaluate-test`로 한 번 평가하세요.
 

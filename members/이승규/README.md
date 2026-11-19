@@ -9,7 +9,7 @@
 | 2. 연합학습 환경 | Flask 서버(`GET /status`, `GET /model`, `POST /update`, `POST /aggregate`)와 가상 클라이언트 실행 프로그램, 제출 검증·제외 사유 기록 |
 | 3. 공격과 방어 | 내부자 협력 공격(악성 2명, 정상 업데이트 평균 × (−5)), 노름 클리핑 후 FedAvg, 좌표별 중앙값 / DLG와 가우시안 노이즈 방어 |
 | 4. 운영 환경별 비교 | 기준·지연·부분 참여·레이블 편향 환경, 72회 일괄 실행 목록(`run_matrix.py`). **본 실험은 아직 안 돌림** |
-| 5. 로그 | 조작 전·후·방어 후 노름, 채택·제외 사유, 실제 채택 악성 비율, 가상·실제 시간 |
+| 5. 로그 | 조작 전·후·방어 후 노름, 채택·제외 사유, 실제 채택 악성 비율, 가상·실제 시간, 클래스별·클라이언트별 정확도, 5라운드마다 전역 모델 저장 |
 | 6. 원인 분석 | 아직 없음 (재실행 스크립트 포함) |
 
 ## 실행 방법
@@ -58,6 +58,8 @@ python scripts/make_split.py --show-dist configs/splits/iid_seed0.json   # 분�
 - 옵션: `--env`, `--attack / --no-attack`, `--aggregator {fedavg,clip_fedavg,median}`, `--clip-norm`, `--clip-before-median`, `--attack-defense`(설정 파일)
 - 같은 환경·시드면 공격·집계 방식이 달라도 악성 ID·지연 ID·라운드별 참여자가 같습니다. 서버는 참여자·가상 마감·집계 방식만 알고 악성 ID는 모릅니다.
 - 로그: `rounds.csv`(선택·채택·지연 제외 수, 전체·실제 채택 악성 비율(채택 0개면 `N/A`), 모델 갱신 여부와 사유, 가상 경과 시간, 실제 시간), `clients.csv`(라운드 × 클라이언트: 악성·선택·공격 여부, 조작 전·후·방어 후 노름, 채택·제외 사유, 가상 완료 시각, 실제 시간)
+- 성능: `class_acc.csv`(라운드 × 클래스 정확도), `client_acc.csv`(라운드 × 클라이언트의 분포 가중 정확도 = Σ 클래스 비율 × 클래스 정확도). `--evaluate-test`면 테스트셋 줄(`split=test`)도 추가
+- 모델: `models/round_XXX.pt`(라운드 0, 5의 배수, 마지막 라운드 집계 후 전역 모델. 간격은 `--save-every`), `models/final_model.pt`
 - `run_matrix.py`의 결과 요약: `experiments/<prefix>/runs.csv`
 
 ## 현재 설정 (`configs/base.yaml`)

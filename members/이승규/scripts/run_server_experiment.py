@@ -81,7 +81,7 @@ def main() -> None:
         try:
             wait_until_ready(url, server)
             summary = run_clients(cfg, out_dir, repo_root=REPO_ROOT, server_url=url, plan=plan,
-                                  evaluate_test=args.evaluate_test)
+                                  evaluate_test=args.evaluate_test, save_every=args.save_every)
         finally:
             stop(server)
     print(json.dumps(summary, indent=2, ensure_ascii=False))
