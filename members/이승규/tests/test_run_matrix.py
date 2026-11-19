@@ -139,3 +139,23 @@ def test_summary_without_test_acc_is_incomplete(tmp_path):
     write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": 0.4}))
 
     assert run_status(tmp_path / run.name, expected) == ("incomplete", ["summary.json에 final_test_acc 없음"])
+
+
+@pytest.mark.parametrize("value", ["N/A", "0.5", float("nan"), float("inf"), -0.1, 1.5, True])
+def test_summary_with_bad_test_acc_is_incomplete(tmp_path, value):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": 0.4, "final_test_acc": value}))
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and problems[0].startswith("summary.json의 final_test_acc가")
+
+
+@pytest.mark.parametrize("value", [0, 1, 0.0, 1.0])
+def test_summary_accepts_accuracy_bounds(tmp_path, value):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": value, "final_test_acc": value}))
+
+    assert run_status(tmp_path / run.name, expected) == ("done", [])

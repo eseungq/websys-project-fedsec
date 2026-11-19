@@ -10,7 +10,7 @@
 - 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
 - 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·참여 수·최소 채택 수·공격·방어·라운드 수)과 다르면
   시작 전에 멈춘다 (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
-- 끊긴 실행(폴더는 있는데 summary.json 없음, 또는 summary.json에 결과 항목이 빠짐)이 있으면 시작 전에 멈춘다
+- 끊긴 실행(폴더는 있는데 summary.json 없음, 또는 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님)이 있으면 시작 전에 멈춘다
   → 그 폴더를 지우거나 옮긴 뒤 다시 실행
 - 실행이 실패하면 그 자리에서 멈춘다
 """
@@ -18,6 +18,7 @@
 import argparse
 import csv
 import json
+import math
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -35,7 +36,7 @@ AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGAT
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_PREFIX = "matrix"
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "rounds_not_updated", "total_virtual_time", "total_sec")
-# 비교표에 꼭 있어야 하는 결과 (없으면 끝난 실행으로 치지 않음)
+# 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
 REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
 
 
@@ -103,6 +104,19 @@ def _diff(saved: dict, expected: dict, prefix: str) -> list[str]:
     return lines
 
 
+def summary_problems(summary: dict) -> list[str]:
+    """비교표에 쓸 정확도가 빠졌거나 0~1 사이 유한한 숫자가 아니면 그 항목들."""
+    problems = []
+    for key in REQUIRED_SUMMARY_KEYS:
+        value = summary.get(key)
+        if value is None:
+            problems.append(f"summary.json에 {key} 없음")
+        elif isinstance(value, bool) or not isinstance(value, (int, float)) \
+                or not math.isfinite(value) or not 0 <= value <= 1:
+            problems.append(f"summary.json의 {key}가 0~1 사이 숫자가 아님: {value!r}")
+    return problems
+
+
 def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     """("todo" | "incomplete" | "stale" | "done", 다른 설정 또는 빠진 결과 목록)."""
     if not out_dir.exists():
@@ -114,9 +128,9 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
         return "incomplete", []
     if not isinstance(summary, dict) or not isinstance(saved, dict):
         return "incomplete", []
-    missing = [key for key in REQUIRED_SUMMARY_KEYS if summary.get(key) is None]
-    if missing:
-        return "incomplete", [f"summary.json에 {key} 없음" for key in missing]
+    problems = summary_problems(summary)
+    if problems:
+        return "incomplete", problems
     mismatches = config_mismatches(saved, expected)
     return ("stale", mismatches) if mismatches else ("done", [])
 
@@ -162,7 +176,7 @@ def main() -> None:
     incomplete = [run.name + "".join(f"\n    {reason}" for reason in checked[run][1])
                   for run in runs if statuses[run] == "incomplete"]
     if incomplete:
-        sys.exit("끊긴 실행이 있습니다 (summary.json 없음 또는 결과 항목 빠짐). 지우거나 옮긴 뒤 다시 실행하세요:\n  "
+        sys.exit("끊긴 실행이 있습니다 (summary.json 없음, 결과 항목 빠짐 또는 잘못된 값). 지우거나 옮긴 뒤 다시 실행하세요:\n  "
                  + "\n  ".join(incomplete))
     stale = [f"{run.name}\n    " + "\n    ".join(checked[run][1]) for run in runs if statuses[run] == "stale"]
     if stale:
