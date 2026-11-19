@@ -11,10 +11,12 @@
 - 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·참여 수·최소 채택 수·공격·방어·라운드 수)과 다르면
   시작 전에 멈춘다 (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
 - 끊긴 실행(summary.json 없음, 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님, rounds.csv·clients.csv 줄 수가
-  라운드 수와 맞지 않음, class_acc.csv·client_acc.csv가 비었음, env.json을 읽을 수 없음)이 있으면 시작 전에 멈춘다
+  라운드 수와 맞지 않음, class_acc.csv·client_acc.csv에 라운드·분할·ID별 행이 빠지거나 중복됨, env.json을 읽을 수 없음,
+  정상 실행이 발산함)이 있으면 시작 전에 멈춘다
   → 그 폴더를 지우거나 옮긴 뒤 다시 실행
-- 학습이 발산한 실행은 발산 전 전역 모델로 평가해 끝난 실행으로 친다 (summary.json의 diverged_round)
-- 실행이 실패하면 그 자리에서 멈춘다
+- 공격 실험이 발산하면 발산 전 전역 모델로 평가해 끝난 실행으로 친다 (summary.json의 diverged_round).
+  1라운드 집계 직후 발산하면 정확도 없는 diverged 상태로 끝난 실행으로 친다 (비교표에 넣지 않음)
+- 실행이 실패하거나, 끝났는데 위 판정이 done·diverged가 아니면 그 자리에서 멈춘다
 """
 
 import argparse
