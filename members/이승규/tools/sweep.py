@@ -16,6 +16,7 @@
 """
 
 import argparse
+import json
 import math
 import re
 import subprocess
@@ -30,9 +31,21 @@ BASE_CONFIG = "configs/base.yaml"      # run_experiment.py의 --config 기본값
 OPTIONS = ("seed", "rounds", "lr", "momentum", "weight_decay", "local_ep", "local_bs")
 INT_OPTIONS = ("seed", "rounds", "local_ep", "local_bs")
 TOP_OPTIONS = ("seed", "rounds")       # 나머지 옵션은 train 아래 값
+
+
+def whole_number(value) -> int:
+    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (load_config와 같음)."""
+    number = float(value)
+    if not number.is_integer():
+        raise ValueError(f"정수여야 합니다: {value!r}")
+    return int(number)
+
+
 # config.yaml에 기록되는 키와 형 (fedsec.experiment.config.load_config와 같은 규칙. tests/test_sweep_contract.py가 확인)
-TOP_TYPES = {"seed": int, "split": str, "data_root": str, "rounds": int, "model": str, "eval_bs": int}
-TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": int, "local_bs": int}
+TOP_TYPES = {"seed": whole_number, "split": str, "data_root": str, "rounds": whole_number, "model": str,
+             "eval_bs": whole_number}
+TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": whole_number,
+               "local_bs": whole_number}
 SUPPORTED_OPTIMIZERS = ("sgd",)
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -83,9 +96,12 @@ def _check_mapping(config, where: str) -> None:
 
 
 def _typed(values: dict, types: dict, where: str) -> dict:
-    """config.yaml에 기록되는 키만 남기고 load_config와 같은 형으로 바꾼다."""
+    """config.yaml에 기록되는 키만 남기고 load_config와 같은 형으로 바꾼다. 빠진 키는 load_config처럼 거부."""
+    missing = [key for key in types if key not in values]
+    if missing:
+        raise ValueError(f"{where}: 필수 항목이 없습니다: {', '.join(missing)}")
     try:
-        return {key: cast(values[key]) for key, cast in types.items() if key in values}
+        return {key: cast(values[key]) for key, cast in types.items()}
     except (TypeError, ValueError) as e:
         raise ValueError(f"{where}: 값의 형식이 잘못됐습니다: {e}") from e
 
@@ -122,6 +138,13 @@ def run_status(out_dir: Path, expected: dict) -> str:
         return "new"
     if not (out_dir / "summary.json").exists():
         raise ValueError(f"끊긴 실행입니다 (summary.json 없음): {out_dir}\n"
+                         "  그 폴더를 지우거나 옮긴 뒤 다시 실행하세요.")
+    try:
+        summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        summary = None
+    if not isinstance(summary, dict):
+        raise ValueError(f"완료 기록이 깨졌습니다 (summary.json을 읽을 수 없음): {out_dir}\n"
                          "  그 폴더를 지우거나 옮긴 뒤 다시 실행하세요.")
     config = yaml.safe_load((out_dir / "config.yaml").read_text(encoding="utf-8"))
     _check_mapping(config, str(out_dir / "config.yaml"))

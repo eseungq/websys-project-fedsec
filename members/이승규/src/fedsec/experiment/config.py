@@ -45,8 +45,16 @@ def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
+def whole_number(value) -> int:
+    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (int()는 조용히 버림)."""
+    number = float(value)
+    if not number.is_integer():
+        raise ValueError(f"정수여야 합니다: {value!r}")
+    return int(number)
+
+
 # YAML 1.1은 5e-4 같은 지수 표기를 문자열로 읽으므로 숫자로 바꾼다
-TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": int, "local_bs": int}
+TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": whole_number, "local_bs": whole_number}
 
 
 def load_config(path: Path) -> ExperimentConfig:
@@ -57,10 +65,10 @@ def load_config(path: Path) -> ExperimentConfig:
         raise ValueError(f"아직 지원하지 않는 옵티마이저입니다: {optimizer}")
     try:
         cfg = ExperimentConfig(
-            seed=int(raw["seed"]), split=str(raw["split"]), data_root=str(raw["data_root"]),
-            rounds=int(raw["rounds"]), model=str(raw["model"]),
+            seed=whole_number(raw["seed"]), split=str(raw["split"]), data_root=str(raw["data_root"]),
+            rounds=whole_number(raw["rounds"]), model=str(raw["model"]),
             train=TrainConfig(**{k: TRAIN_TYPES[k](v) if k in TRAIN_TYPES else v for k, v in train.items()}),
-            eval_bs=int(raw["eval_bs"]),
+            eval_bs=whole_number(raw["eval_bs"]),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError(f"설정 파일 {path}의 항목이 잘못되었습니다: {error}") from error

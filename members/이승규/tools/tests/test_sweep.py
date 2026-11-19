@@ -29,8 +29,10 @@ with open("calls.txt", "a") as f:
 '''
 
 
-BASE = {"seed": 0, "rounds": 50, "model": "simple_cnn",
-        "train": {"optimizer": "sgd", "lr": 0.01, "weight_decay": 0.0}}
+BASE = {"seed": 0, "split": "configs/splits/iid_seed0.json", "data_root": "data", "rounds": 50,
+        "model": "simple_cnn", "eval_bs": 1000,
+        "train": {"optimizer": "sgd", "lr": 0.01, "momentum": 0.9, "weight_decay": 0.0, "local_ep": 1, "local_bs": 32}}
+BASE_TRAIN = {k: v for k, v in BASE["train"].items() if k != "optimizer"}
 
 
 def write_base(root, base):
@@ -87,8 +89,8 @@ def test_build_command_uses_sweep_folder_and_dashed_flags():
 def test_expected_config_overrides_base_and_drops_optimizer():
     result = expected_config(BASE, {"seed": 2, "lr": 0.05})
 
-    assert result == {"seed": 2, "rounds": 50, "model": "simple_cnn",
-                      "train": {"lr": 0.05, "weight_decay": 0.0}}
+    assert result == {**{k: v for k, v in BASE.items() if k != "train"}, "seed": 2,
+                      "train": {**BASE_TRAIN, "lr": 0.05}}
     assert BASE["seed"] == 0 and BASE["train"]["lr"] == 0.01      # 원본은 그대로
 
 
@@ -109,11 +111,12 @@ def test_config_mismatches_reports_value_missing_in_saved_config():
 
 
 def test_expected_config_converts_types_like_load_config():
-    base = {"seed": 0, "rounds": 40.0, "train": {"lr": "1e-2", "weight_decay": "5e-4", "local_ep": 1}}
+    base = {**BASE, "rounds": 40.0, "train": {**BASE["train"], "lr": "1e-2", "weight_decay": "5e-4", "local_bs": "32"}}
 
     result = expected_config(base, {})
 
-    assert result == {"seed": 0, "rounds": 40, "train": {"lr": 0.01, "weight_decay": 0.0005, "local_ep": 1}}
+    assert result["rounds"] == 40 and isinstance(result["rounds"], int)
+    assert result["train"] == {**BASE_TRAIN, "lr": 0.01, "weight_decay": 0.0005, "local_bs": 32}
 
 
 def test_expected_config_keeps_only_keys_written_to_config_yaml():
@@ -126,7 +129,20 @@ def test_expected_config_keeps_only_keys_written_to_config_yaml():
 
 def test_expected_config_rejects_non_numeric_value():
     with pytest.raises(ValueError, match="형식이 잘못"):
-        expected_config({"train": {"lr": "abc"}}, {})
+        expected_config({**BASE, "train": {**BASE["train"], "lr": "abc"}}, {})
+
+
+@pytest.mark.parametrize("value", [1.9, "1.9"])
+def test_expected_config_rejects_fractional_integer(value):
+    with pytest.raises(ValueError, match="정수여야 합니다"):
+        expected_config({**BASE, "train": {**BASE["train"], "local_ep": value}}, {})
+
+
+def test_expected_config_rejects_missing_required_key():
+    train = {k: v for k, v in BASE["train"].items() if k != "weight_decay"}
+
+    with pytest.raises(ValueError, match="필수 항목이 없습니다: weight_decay"):
+        expected_config({**BASE, "train": train}, {})
 
 
 def test_config_mismatches_compares_ints_exactly():
@@ -238,3 +254,23 @@ def test_run_sweep_stops_on_unsupported_optimizer_before_checking_results(root, 
 
     assert result == 1
     assert "지원하지 않는 옵티마이저입니다: adam" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("text", ["", "{", "[]"])
+def test_run_status_rejects_broken_summary(tmp_path, text):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "summary.json").write_text(text)
+
+    with pytest.raises(ValueError, match="완료 기록이 깨졌습니다"):
+        run_status(tmp_path / "a", {})
+
+
+def test_run_sweep_stops_when_base_misses_required_key_before_reusing_result(root, capsys):
+    runs = parse_plan({"runs": [{"name": "a", "lr": 0.1}]})
+    run_sweep(runs, root, sys.executable)
+    write_base(root, {**BASE, "train": {k: v for k, v in BASE["train"].items() if k != "weight_decay"}})
+
+    result = run_sweep(runs, root, sys.executable)
+
+    assert result == 1
+    assert "필수 항목이 없습니다: weight_decay" in capsys.readouterr().out

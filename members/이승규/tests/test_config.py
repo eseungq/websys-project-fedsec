@@ -32,3 +32,20 @@ def test_load_config_rejects_non_numeric_value(tmp_path):
 
     with pytest.raises(ValueError, match="항목이 잘못"):
         load_config(path)
+
+
+@pytest.mark.parametrize("line, value", [("local_ep: 1", "local_ep: 1.9"), ("local_bs: 32", "local_bs: 32.5")])
+def test_load_config_rejects_fractional_integer(tmp_path, line, value):
+    path = write_base(tmp_path, BASE_TEXT.replace(line, value))
+
+    with pytest.raises(ValueError, match="정수여야 합니다"):
+        load_config(path)
+
+
+def test_load_config_accepts_whole_number_float_and_string(tmp_path):
+    path = write_base(tmp_path, BASE_TEXT.replace("local_ep: 1", "local_ep: 2.0").replace("local_bs: 32", "local_bs: '64'"))
+
+    cfg = load_config(path)
+
+    assert (cfg.train.local_ep, cfg.train.local_bs) == (2, 64)
+    assert isinstance(cfg.train.local_ep, int)
