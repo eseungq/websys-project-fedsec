@@ -111,6 +111,13 @@ class ServerState:
             self._record_exclusion(None, rejection)
         return rejection
 
+    def reject_bad_json(self, detail: str) -> Rejection:
+        """JSON이 아닌 본문으로 온 제출 (client_id를 알 수 없음)."""
+        rejection = Rejection("bad_json", detail)
+        with self._lock:
+            self._record_exclusion(None, rejection)
+        return rejection
+
     def _record_exclusion(self, payload, rejection: Rejection) -> None:
         fields = payload if isinstance(payload, dict) else {}
         record = {
@@ -128,14 +135,16 @@ class ServerState:
             t_start = time.perf_counter()
             accepted = [self.pending[cid] for cid in sorted(self.pending)]  # 제출 순서와 무관하게 ID 순으로 더한다
             skip_reason = self._skip_reason(len(accepted))
-            aggregate_norm = None
+            # 새 상태와 기록을 모두 계산한 뒤에 한 번에 반영한다 (중간에 실패하면 서버 상태는 그대로)
+            new_state, new_version, aggregate_norm = self.global_state, self.model_version, None
             if skip_reason is None:
                 aggregated = self.policy.aggregator([s.update for s in accepted], [s.num_samples for s in accepted])
-                self.global_state = apply_update(self.global_state, aggregated)
-                self.model_version += 1
+                new_state = apply_update(self.global_state, aggregated)
+                new_version = self.model_version + 1
                 aggregate_norm = round(update_norm(aggregated), 4)
             record = {**self._round_record(accepted, skip_reason, time.perf_counter() - t_start),
-                      "aggregate_norm": aggregate_norm}
+                      "model_version": new_version, "aggregate_norm": aggregate_norm}
+            self.global_state, self.model_version = new_state, new_version
             self.history = [*self.history, record]
             self.round += 1
             self.pending = {}

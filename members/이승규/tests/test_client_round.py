@@ -59,7 +59,7 @@ class FlaskApi:
         return self._client.post("/update", json=payload).get_json()
 
     def aggregate(self) -> dict:
-        return self._client.post("/aggregate").get_json()["data"]
+        return self._client.post("/aggregate", json={}).get_json()["data"]
 
 
 def _data(seed: int, n: int) -> TensorData:

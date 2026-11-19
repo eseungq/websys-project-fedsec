@@ -13,6 +13,8 @@ from fedsec.server.validation import Rejection
 # 이 PC 안에서만 접속을 받는다. macOS는 5000번(AirPlay 수신)을 쓰므로 다른 포트를 기본으로 한다.
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+# Host 헤더가 이 이름이 아니면 거부한다 (같은 PC의 브라우저를 통한 DNS rebinding 차단)
+ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost"})
 
 # JSON 본문 상한: Base64는 원본의 4/3배이고, 나머지 항목을 위한 여유를 더한다
 REQUEST_OVERHEAD_BYTES = 64 * 1024
@@ -30,6 +32,18 @@ def create_app(state: ServerState) -> Flask:
     app = Flask(__name__)
     app.json.ensure_ascii = False  # 한국어 사유 메시지를 그대로 보이게
     app.config["MAX_CONTENT_LENGTH"] = state.max_update_bytes * 4 // 3 + REQUEST_OVERHEAD_BYTES
+
+    @app.before_request
+    def local_only():
+        host = request.host.rsplit(":", 1)[0]
+        if host not in ALLOWED_HOSTS:
+            return _reply(None, f"허용되지 않은 Host입니다: {request.host[:100]}", 403)
+        # POST는 JSON만 받는다. 브라우저가 preflight 없이 보내는 단순 요청(form, text/plain)을 막는다
+        if request.method == "POST" and not request.is_json:
+            if request.path == "/update":
+                return _rejection_reply(state.reject_bad_json("Content-Type이 application/json이 아닙니다."))
+            return _reply(None, "Content-Type은 application/json이어야 합니다.", 415)
+        return None
 
     @app.get("/status")
     def status():

@@ -70,7 +70,7 @@ class ServerApi:
         return self._call("POST", "/update", payload)
 
     def aggregate(self) -> dict:
-        return self._call("POST", "/aggregate")["data"]
+        return self._call("POST", "/aggregate", {})["data"]
 
 
 @dataclass(frozen=True)

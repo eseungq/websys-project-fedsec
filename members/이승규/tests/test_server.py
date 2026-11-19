@@ -48,7 +48,7 @@ def test_aggregate_matches_weighted_average():
     _, client = _server()
     _submit_all(client, deltas, samples)
 
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
     new_global = decode_state(client.get("/model").get_json()["data"]["weights"])
 
     # w[0] = 1 + (1·100 + 4·300 − 2·100) / 500 = 3.2,  w[1] = 2 + (0·100 + 3·300 + 1·100) / 500 = 4.0
@@ -66,8 +66,8 @@ def test_aggregate_order_does_not_depend_on_submission_order():
     for cid in (2, 1, 0):
         client_b.post("/update", json=_payload(cid, deltas[cid], num_samples=1))
 
-    client_f.post("/aggregate")
-    client_b.post("/aggregate")
+    client_f.post("/aggregate", json={})
+    client_b.post("/aggregate", json={})
 
     assert all(torch.equal(forward.global_state[k], backward.global_state[k]) for k in GLOBAL)
 
@@ -76,7 +76,7 @@ def test_round_and_version_advance_after_aggregate():
     state, client = _server()
     _submit_all(client, [_delta(0.1, 0.1, 0.1)] * 3, [1, 1, 1])
 
-    client.post("/aggregate")
+    client.post("/aggregate", json={})
     snapshot = client.get("/model").get_json()["data"]
 
     assert (snapshot["round"], snapshot["model_version"]) == (2, 1)
@@ -90,7 +90,7 @@ def test_fewer_than_min_accepted_keeps_model(num_accepted, reason):
     state, client = _server()
     _submit_all(client, [_delta(5.0, 5.0, 5.0)] * num_accepted, [1] * num_accepted)
 
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
 
     assert (record["updated"], record["skip_reason"], record["num_accepted"]) == (False, reason, num_accepted)
     assert all(torch.equal(state.global_state[k], GLOBAL[k]) for k in GLOBAL)
@@ -101,7 +101,7 @@ def test_min_accepted_is_configurable():
     state, client = _server(policy=ServerPolicy(min_accepted=1))
     _submit_all(client, [_delta(1.0, 1.0, 1.0)], [1])
 
-    assert client.post("/aggregate").get_json()["data"]["updated"]
+    assert client.post("/aggregate", json={}).get_json()["data"]["updated"]
     assert state.model_version == 1
 
 
@@ -186,7 +186,7 @@ def test_round_record_counts_exclusions():
     client.post("/update", json=_payload(0))
     client.post("/update", json=_payload(3, NAN_DELTA))
 
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
     status = client.get("/status").get_json()["data"]
 
     assert (record["num_accepted"], record["num_excluded"]) == (3, 2)
@@ -201,7 +201,7 @@ def test_injected_aggregator_is_used():
     state, client = _server(policy=ServerPolicy(aggregator=take_first))
     _submit_all(client, [_delta(1.0, 1.0, 1.0), _delta(9.0, 9.0, 9.0), _delta(9.0, 9.0, 9.0)], [1, 1, 1])
 
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
 
     assert record["aggregator"] == "take_first"
     assert torch.equal(state.global_state["w"], torch.tensor([2.0, 3.0]))
@@ -251,7 +251,7 @@ def test_server_log_writes_round_and_exclusion_files(tmp_path):
     _, client = _server(log=ServerLog(tmp_path))
     _submit_all(client, [_delta(0.1, 0.1, 0.1)] * 3, [1, 1, 1])
     client.post("/update", json=_payload(0))
-    client.post("/aggregate")
+    client.post("/aggregate", json={})
 
     exclusions = (tmp_path / "exclusions.csv").read_text(encoding="utf-8").splitlines()
     rounds = (tmp_path / "server_rounds.csv").read_text(encoding="utf-8").splitlines()
@@ -266,3 +266,79 @@ def test_initial_global_state_is_reproducible():
 
     assert all(torch.equal(first[k], second[k]) for k in first)
     assert not all(torch.equal(first[k], other[k]) for k in first)
+
+
+# 검사에서 찾은 빈틈: 한 제출이 FedAvg를 독점하거나 라운드를 멈추게 하는 값
+@pytest.mark.parametrize("overrides, reason", [
+    ({"num_samples": 50_001}, "bad_num_samples"),          # 상한(CIFAR-10 학습 이미지 수) 초과
+    ({"num_samples": 10**400}, "bad_num_samples"),         # float 변환 시 OverflowError
+    ({"num_samples": True}, "bad_num_samples"),
+    ({"virtual_finish_time": -1.0}, "bad_type"),
+    ({"virtual_finish_time": float("inf")}, "bad_type"),
+    ({"virtual_finish_time": 10**400}, "bad_type"),
+])
+def test_out_of_range_numbers_are_rejected(overrides, reason):
+    state, _ = _server()
+
+    outcome = state.submit(_payload(0, **overrides))
+
+    assert outcome.reason == reason
+    assert state.pending == {} and state.exclusions[-1]["reason"] == reason
+
+
+def test_sparse_update_is_bad_shape_not_server_error():
+    state, client = _server()
+    sparse = {"w": torch.tensor([0.1, 0.0]).to_sparse(), "b": torch.tensor([0.1])}
+
+    reply = client.post("/update", json=_payload(0, sparse))
+
+    assert (reply.status_code, reply.get_json()["data"]["reason"]) == (400, "bad_shape")
+    assert state.exclusions[-1]["reason"] == "bad_shape"
+
+
+def test_update_whose_norm_overflows_float32_is_rejected():
+    # 원소는 유한(1e20)하지만 제곱합이 float32 최대(약 3.4e38)를 넘어 노름이 inf → 집계·클리핑이 실패하던 값
+    state, client = _server()
+
+    reply = client.post("/update", json=_payload(0, _delta(1e20, 1e20, 0.0)))
+
+    assert reply.get_json()["data"]["reason"] == "non_finite"
+
+
+def test_rejection_detail_is_truncated():
+    state, _ = _server()
+
+    outcome = state.submit(_payload(0, num_samples="x" * 5000))
+
+    assert len(outcome.detail) <= 201 and len(state.exclusions[-1]["detail"]) <= 201
+
+
+def test_failed_aggregation_leaves_server_state_unchanged():
+    def broken(updates, weights):
+        raise RuntimeError("집계 실패")
+
+    state, client = _server(policy=ServerPolicy(aggregator=broken))
+    _submit_all(client, [_delta(0.1, 0.1, 0.1)] * 3, [100] * 3)
+
+    reply = client.post("/aggregate", json={})
+
+    assert reply.status_code == 500
+    assert (state.round, state.model_version, sorted(state.pending), state.history) == (1, 0, [0, 1, 2], [])
+    assert torch.equal(state.global_state["w"], GLOBAL["w"])
+
+
+def test_other_host_header_is_forbidden():
+    _, client = _server()
+
+    assert client.get("/status", headers={"Host": "attacker.example:8765"}).status_code == 403
+    assert client.get("/status", headers={"Host": "127.0.0.1:8765"}).status_code == 200
+
+
+def test_non_json_post_cannot_close_round():
+    # 브라우저가 preflight 없이 보낼 수 있는 단순 요청(본문 없음, form)으로는 라운드를 넘길 수 없다
+    state, client = _server()
+
+    assert client.post("/aggregate").status_code == 415
+    assert client.post("/aggregate", data={"a": "1"}).status_code == 415
+    assert state.round == 1
+    assert client.post("/update", data={"client_id": "0"}).get_json()["data"]["reason"] == "bad_json"

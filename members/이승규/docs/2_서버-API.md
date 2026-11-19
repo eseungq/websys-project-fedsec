@@ -56,6 +56,8 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 
 ## API
 모든 응답은 `{"ok": true/false, "data": ..., "error": 문자열 또는 null}` 형식이다.
+- Host 헤더가 `127.0.0.1`·`localhost`가 아니면 403. POST는 `Content-Type: application/json`만 받는다(`/aggregate`도 빈 객체 `{}`를 보냄). 같은 PC의 브라우저를 통한 요청 위조를 막기 위해서다
+- 제외 사유 문장(`error`)은 200자에서 자른다
 
 ### `GET /status`
 서버 상태. 클라이언트가 시작할 때 설정을 대조하는 데 쓴다.
@@ -98,8 +100,8 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 |---|---|---|
 | `bad_json` | 400 | 본문이 JSON 객체가 아님 |
 | `missing_field` | 400 | 필수 항목 없음 (마감이 있는 라운드의 `virtual_finish_time` 포함) |
-| `bad_type` | 400 | 항목 자료형이 틀림 |
-| `bad_num_samples` | 400 | 표본 수가 양의 정수가 아님 |
+| `bad_type` | 400 | 항목 자료형이 틀림 (`virtual_finish_time`은 0 이상의 유한한 숫자) |
+| `bad_num_samples` | 400 | 표본 수가 1\~50,000 사이 정수가 아님 (상한이 없으면 한 제출이 FedAvg 가중치를 독점할 수 있음) |
 | `unknown_client` | 403 | 등록되지 않은 클라이언트 ID |
 | `not_selected` | 403 | 이번 라운드 참여자가 아님 |
 | `round_mismatch` | 409 | 서버의 현재 라운드와 다름 |
@@ -108,8 +110,8 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 | `late` | 409 | 가상 완료 시각이 마감을 넘음 |
 | `too_large` | 413 | 요청·가중치가 크기 상한(16MB)을 넘음 |
 | `bad_payload` | 400 | Base64·torch 파일 형식이 아님 |
-| `bad_shape` | 400 | 파라미터 이름·모양·자료형이 전역 모델과 다름 |
-| `non_finite` | 400 | NaN 또는 Inf 포함 |
+| `bad_shape` | 400 | 파라미터 이름·모양·자료형·저장 형식(sparse 등)이 전역 모델과 다름 |
+| `non_finite` | 400 | NaN 또는 Inf 포함, 또는 업데이트 노름이 float32 범위를 넘음 |
 
 ---
 
@@ -131,4 +133,4 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 ## 검증
 - **서버 없는 실행기와 비교:** 같은 설정·시드로 3라운드를 돌려 최종 모델 가중치가 비트 단위로 같았다. 서버를 거치는 비용은 라운드당 약 0.5초(직렬화 + HTTP)
 - **테스트:** `tests/test_server.py`(API·제외 사유·집계), `tests/test_serialization.py`(가중치 변환·크기 상한·악성 파일 거부), `tests/test_client_round.py`(서버와 클라이언트를 Flask 테스트 클라이언트로 끝까지 돌림)
-- **안전:** 서버는 `127.0.0.1`에서만 받는다. 가중치는 `torch.load(weights_only=True)`로만 풀어 텐서 외 객체를 거부한다
+- **안전:** 서버는 `127.0.0.1`에서만 받고, `/aggregate`가 실패하면 서버 상태(라운드·모델·대기 업데이트)를 바꾸지 않는다. 가중치는 `torch.load(weights_only=True)`로만 풀어 텐서 외 객체를 거부한다

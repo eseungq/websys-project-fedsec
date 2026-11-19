@@ -127,7 +127,7 @@ def test_server_records_defended_and_aggregate_norms():
     for cid, update in enumerate(UPDATES):
         assert _submit(client, cid, update).status_code == 200
 
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
 
     assert record["aggregator"] == "clip_fedavg"
     assert record["update_norms"] == [5.0, 1.0, 1.0]
@@ -143,7 +143,7 @@ def test_late_submission_is_excluded_by_env_deadline():
 
     on_time = _submit(client, 0, UPDATES[0], finish=1.0)
     late = _submit(client, 1, UPDATES[1], finish=3.0)
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
 
     assert on_time.status_code == 200
     assert late.get_json()["data"]["reason"] == "late"
@@ -158,6 +158,6 @@ def test_defended_norms_are_rounded_without_clipping():
     for cid in range(3):
         _submit(client, cid, {"w": torch.tensor([1.0, 1.0])})  # 노름 √2 = 1.41421...
 
-    record = client.post("/aggregate").get_json()["data"]
+    record = client.post("/aggregate", json={}).get_json()["data"]
 
     assert record["defended_norms"] == record["update_norms"] == [1.4142] * 3
