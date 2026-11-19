@@ -45,6 +45,10 @@ def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
+# YAML 1.1은 5e-4 같은 지수 표기를 문자열로 읽으므로 숫자로 바꾼다
+TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": int, "local_bs": int}
+
+
 def load_config(path: Path) -> ExperimentConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     train = dict(raw["train"])
@@ -55,8 +59,9 @@ def load_config(path: Path) -> ExperimentConfig:
         cfg = ExperimentConfig(
             seed=int(raw["seed"]), split=str(raw["split"]), data_root=str(raw["data_root"]),
             rounds=int(raw["rounds"]), model=str(raw["model"]),
-            train=TrainConfig(**train), eval_bs=int(raw["eval_bs"]),
+            train=TrainConfig(**{k: TRAIN_TYPES[k](v) if k in TRAIN_TYPES else v for k, v in train.items()}),
+            eval_bs=int(raw["eval_bs"]),
         )
-    except (KeyError, TypeError) as error:
+    except (KeyError, TypeError, ValueError) as error:
         raise ValueError(f"설정 파일 {path}의 항목이 잘못되었습니다: {error}") from error
     return _validated(cfg)
