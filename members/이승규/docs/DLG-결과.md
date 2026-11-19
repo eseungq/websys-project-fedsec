@@ -156,13 +156,14 @@ truck(1)의 궤적 (`experiments/dlg/iterations/trajectory.csv`, 1000회 실행.
 - **코드 상태:** 모든 실행의 `env.json`은 `dirty: true`다(커밋 `e1022ca` 위에서 아직 커밋하지 않은 코드로 실행).
 
 ## 결과 파일
-| 실험 | 결과 폴더 (`members/이승규/` 기준) | 명령 |
+| 실험 | 결과 폴더 (`members/이승규/` 기준) | 다시 실행하는 명령 (새 폴더 `*_rerun`) |
 |---|---|---|
-| 1 | `experiments/dlg/sweep_sigma/` | `python scripts/run_dlg.py --name sweep_sigma --sigmas 0 1e-4 1e-3 1e-2 1e-1` |
-| 2 | `experiments/dlg/refine_sigma/` | `python scripts/run_dlg.py --name refine_sigma --sigmas 0.003 0.03` |
-| 3 | `experiments/dlg/iterations/` | `python scripts/run_dlg.py --name iterations --sigmas 0 0.001 0.01 --iterations 50 1000` |
-| 4 | `experiments/dlg/dog_sigma0.01_dummy{1,2,3}/` | `python scripts/run_dlg.py --name dog_sigma0.01_dummy1 --images 27 --sigmas 0.01 --dummy-seed 1` (2, 3도 같은 방식) |
+| 1 | `experiments/dlg/sweep_sigma/` | `python scripts/run_dlg.py --name sweep_sigma_rerun --sigmas 0 1e-4 1e-3 1e-2 1e-1` |
+| 2 | `experiments/dlg/refine_sigma/` | `python scripts/run_dlg.py --name refine_sigma_rerun --sigmas 0.003 0.03` |
+| 3 | `experiments/dlg/iterations/` | `python scripts/run_dlg.py --name iterations_rerun --sigmas 0 0.001 0.01 --iterations 50 1000` |
+| 4 | `experiments/dlg/dog_sigma0.01_dummy{1,2,3}/` | `python scripts/run_dlg.py --name dog_sigma0.01_dummy1_rerun --images 27 --sigmas 0.01 --dummy-seed 1` (2, 3도 같은 방식) |
 
 - 다시 실행할 때 기준은 각 폴더의 `config.yaml`이다. `configs/dlg.yaml` 기본값은 실험 뒤 σ 3개로 바뀌었으므로, 위 명령처럼 당시 값을 옵션으로 준다
+- 기존 폴더는 그대로 두고 `*_rerun` 폴더에 새로 만든다 (같은 이름이면 `run_dlg.py`가 멈춤). 두 폴더의 `results.csv`를 비교하면 재현 여부를 확인할 수 있다
 - 폴더마다 `config.yaml`(실제로 쓴 설정), `env.json`, `results.csv`(조합당 1줄), `trajectory.csv`(10회마다), `summary.png`(원본 | σ별 복원). 복원 PNG는 `dlg_images/`(git 무시)
 - `results.csv` 열: `image_index, label, class, sigma, grad_sq_norm, iterations, iterations_done, diverged, mse, mse_unclipped, max_abs_pixel, grad_diff, noise_sq_norm, grad_diff_over_noise, pred_label, label_correct, seconds`
