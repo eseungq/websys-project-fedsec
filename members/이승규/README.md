@@ -36,10 +36,12 @@ python scripts/run_experiment.py --name final --evaluate-test         # 설정 �
 | eval_bs | 1000 |
 
 ## 결과 요약
-[`docs/001-baseline-setup.md`](docs/001-baseline-setup.md)
-- 학습률 비교(0.005 / 0.01 / 0.02, 50라운드) → lr 0.01, 40라운드 제안
-- 시드 반복(시드 0\~2, Kaggle T4 포함) → 40라운드 검증 75.8\~76.2%
-- 업데이트 노름 분포 (클리핑 상한 참고)
+**[학습 설정 결과](docs/학습설정-결과.md)** (11/18 \~ 11/19, 실험 7개)
+
+- 추천: momentum 0.9, lr 0.01, local_ep 1, local_bs 32, 40라운드 + **weight_decay 5e-4** (제안 단계, `configs/base.yaml`에는 아직 반영하지 않음)
+- 시드 0\~2 평균 검증 정확도(마지막 5라운드) 75.44% → **76.40%** (+0.96%p)
+- 실험 1회(40라운드) 로컬 MPS 약 2.5분, Kaggle T4 약 2.2분
+- 결과 폴더 [`experiments/`](experiments/), 비교표 [`experiments/sweep/_tables/`](experiments/sweep/_tables/)
 
 ## 폴더 구성
 | 경로 | 내용 |
@@ -49,4 +51,4 @@ python scripts/run_experiment.py --name final --evaluate-test         # 설정 �
 | `tests/` | 집계·분할 수치 예제 테스트 |
 | `configs/` | 기준 설정 `base.yaml` |
 | `experiments/` | 실험 결과 (`models/`는 커밋 안 함) |
-| `docs/` | 설정 결정 기록 |
+| `docs/` | 학습 설정 결과 문서 (`학습설정-결과.md`) |
