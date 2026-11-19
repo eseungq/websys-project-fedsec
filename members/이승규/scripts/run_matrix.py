@@ -8,6 +8,8 @@
     python scripts/run_matrix.py --prefix matrix_check --rounds 2 --seeds 0 --attacks attack   # 동작 확인 12회
 결과: experiments/<prefix>/<환경>-<normal|attack>-<집계>-s<시드>/, 실행 목록과 결과 요약 experiments/<prefix>/runs.csv
 - 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
+- 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·공격·방어·라운드 수)과 다르면 시작 전에 멈춘다
+  (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
 - 끊긴 실행(폴더는 있는데 summary.json 없음)이 있으면 시작 전에 멈춘다 → 그 폴더를 지우거나 옮긴 뒤 다시 실행
 - 실행이 실패하면 그 자리에서 멈춘다
 """
@@ -20,11 +22,15 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
+from run_clients import add_experiment_args, add_scenario_args, client_setup
+
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 RUN_SCRIPT = Path(__file__).resolve().parent / "run_server_experiment.py"
 ENVS = ("baseline", "delay", "partial", "label_skew")
 ATTACKS = ("normal", "attack")
-AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGATORS와 같음 (torch 없이 목록만 보려고 따로 둠)
+AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGATORS와 같음
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_PREFIX = "matrix"
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "rounds_not_updated", "total_virtual_time", "total_sec")
@@ -59,17 +65,43 @@ def plan_runs(envs, attacks, aggregators, seeds) -> list[Run]:
     return [Run(env, attack, agg, seed) for seed in seeds for env in envs for attack in attacks for agg in aggregators]
 
 
-def run_status(out_dir: Path) -> str:
-    if (out_dir / "summary.json").exists():
-        return "done"
-    return "incomplete" if out_dir.exists() else "todo"
+def expected_config(run: Run, prefix: str, rounds: int | None) -> dict:
+    """이 실행이 config.yaml에 남길 설정. run_clients.py와 같은 함수로 만든다.
+
+    서버 주소처럼 실행마다 바뀌는 값은 넣지 않는다. 저장할 때와 같은 YAML 왕복으로 형을 맞춘다.
+    """
+    parser = argparse.ArgumentParser()
+    add_experiment_args(parser)
+    add_scenario_args(parser)
+    args = parser.parse_args(run.command(prefix, rounds)[2:])
+    cfg, plan, _ = client_setup(args)
+    return yaml.safe_load(yaml.safe_dump({**cfg.to_dict(), "plan": plan.to_dict()}, allow_unicode=True))
 
 
-def index_rows(prefix_dir: Path, runs: list[Run]) -> list[dict]:
+def config_mismatches(saved: dict, expected: dict) -> list[str]:
+    return [f"{key}: 지금 {expected[key]}, 기존 {saved.get(key)}" for key in expected if saved.get(key) != expected[key]]
+
+
+def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
+    """("todo" | "incomplete" | "stale" | "done", 다른 설정 목록)."""
+    if not out_dir.exists():
+        return "todo", []
+    try:
+        summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+        saved = yaml.safe_load((out_dir / "config.yaml").read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        return "incomplete", []
+    if not isinstance(summary, dict) or not isinstance(saved, dict):
+        return "incomplete", []
+    mismatches = config_mismatches(saved, expected)
+    return ("stale", mismatches) if mismatches else ("done", [])
+
+
+def index_rows(prefix_dir: Path, runs: list[Run], statuses: dict[Run, str]) -> list[dict]:
     rows = []
     for run in runs:
         out_dir = prefix_dir / run.name
-        status = run_status(out_dir)
+        status = statuses[run]
         summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8")) if status == "done" else {}
         rows.append({"name": run.name, "env": run.env, "attack": run.attack, "aggregator": run.aggregator,
                      "seed": run.seed, "status": status, **{key: summary.get(key, "") for key in SUMMARY_KEYS}})
@@ -99,12 +131,17 @@ def main() -> None:
 
     runs = plan_runs(args.envs, args.attacks, args.aggregators, args.seeds)
     prefix_dir = MEMBER_ROOT / "experiments" / args.prefix
-    statuses = {run: run_status(prefix_dir / run.name) for run in runs}
+    checked = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds)) for run in runs}
+    statuses = {run: status for run, (status, _) in checked.items()}
     for i, run in enumerate(runs, 1):
         print(f"{i:>3}/{len(runs)} [{statuses[run]:>10}] {run.name}")
     incomplete = [run.name for run in runs if statuses[run] == "incomplete"]
     if incomplete:
         sys.exit(f"끊긴 실행이 있습니다 (summary.json 없음). 지우거나 옮긴 뒤 다시 실행하세요: {', '.join(incomplete)}")
+    stale = [f"{run.name}\n    " + "\n    ".join(checked[run][1]) for run in runs if statuses[run] == "stale"]
+    if stale:
+        sys.exit("같은 이름의 결과가 지금 설정과 다릅니다. --prefix를 바꾸거나 폴더를 옮긴 뒤 다시 실행하세요:\n  "
+                 + "\n  ".join(stale))
     todo = [run for run in runs if statuses[run] == "todo"]
     print(f"전체 {len(runs)}회, 끝남 {len(runs) - len(todo)}회, 남음 {len(todo)}회")
     if args.dry_run:
@@ -118,7 +155,8 @@ def main() -> None:
             if subprocess.run(run.command(args.prefix, args.rounds), cwd=MEMBER_ROOT).returncode != 0:
                 sys.exit(f"실행 실패: {run.name} (끊긴 폴더를 정리한 뒤 같은 명령으로 다시 실행하면 이 실행부터 이어서 함)")
     finally:
-        print(f"요약: {write_index(prefix_dir, index_rows(prefix_dir, runs)).relative_to(MEMBER_ROOT)}")
+        final = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds))[0] for run in runs}
+        print(f"요약: {write_index(prefix_dir, index_rows(prefix_dir, runs, final)).relative_to(MEMBER_ROOT)}")
 
 
 if __name__ == "__main__":
