@@ -254,10 +254,12 @@ def run_status(out_dir: Path, expected: dict, current_env: dict | None = None) -
     mismatches = config_mismatches(saved, expected)
     if mismatches:
         return "stale", mismatches
-    if diverged is not None:
-        problems = diverged_problems(summary, expected)
-        if problems:
-            return "incomplete", problems
+    problems = diverged_problems(summary, expected) if diverged is not None else []
+    if diverged is None and summary.get("rounds_completed") != expected["rounds"]:
+        completed = summary.get("rounds_completed")
+        problems = [f"summary.json의 rounds_completed {completed!r}가 설정 라운드 수({expected['rounds']})와 다름"]
+    if problems:
+        return "incomplete", problems
     # 발산한 실행은 발산 전 라운드까지만 로그가 있다 (program.run_clients)
     problems = output_problems(out_dir, expected["rounds"] if diverged is None else diverged - 1)
     if problems:

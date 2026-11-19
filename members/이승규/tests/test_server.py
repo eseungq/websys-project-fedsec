@@ -384,10 +384,18 @@ def test_failed_round_log_leaves_server_state_unchanged():
 
     state, client = _server(log=BrokenLog())
     _submit_all(client, [_delta(0.1, 0.1, 0.1)] * NUM_CLIENTS, [100] * NUM_CLIENTS)
+    pending = dict(state.pending)
 
     with pytest.raises(OSError):
         state.aggregate()
     assert (state.round, state.model_version, state.history) == (1, 0, [])
+
+    reply = client.post("/aggregate", json={})   # HTTP로 요청해도 500만 돌려주고 상태는 그대로
+
+    assert reply.status_code == 500 and reply.get_json()["ok"] is False
+    assert (state.round, state.model_version, state.history) == (1, 0, [])
+    assert all(torch.equal(state.global_state[k], GLOBAL[k]) for k in GLOBAL)
+    assert state.pending == pending
 
 
 @pytest.mark.parametrize("host", ["localhost:8765", "127.0.0.1", "localhost"])

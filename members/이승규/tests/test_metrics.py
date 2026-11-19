@@ -135,7 +135,7 @@ def test_run_clients_rejects_negative_save_every(tmp_path):
         run_clients(CFG, tmp_path, repo_root=tmp_path, server_url="unused", plan=None, save_every=-1)
 
 
-def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None, attack=True, nan_val_at=None):
+def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None, attack=True, nan_val_at=None, huge_update_at=None):
     """run_clients를 Flask 테스트 클라이언트로 돌린다. diverge_at 라운드의 로컬 학습에서 발산(TrainingDiverged),
     nan_val_at 라운드 집계 뒤 검증 손실이 NaN (전역 모델이 깨진 경우)."""
     env = _env("baseline")
@@ -154,7 +154,10 @@ def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None, attack=True, na
     def local_update(model, state, data, train, generator):
         if api.status()["round"] == diverge_at:
             raise TrainingDiverged("로컬 학습 손실이 nan입니다 (발산).")
-        return original(model, state, data, train, generator)
+        result = original(model, state, data, train, generator)
+        if api.status()["round"] == huge_update_at:   # 원소는 유한(1e20)하지만 노름이 float32 범위를 넘는 업데이트
+            return replace(result, update={k: torch.full_like(v, 1e20) for k, v in result.update.items()})
+        return result
 
     monkeypatch.setattr(program, "local_update", local_update)
     original_eval = program.evaluate_detailed
@@ -222,3 +225,11 @@ def test_attack_broken_in_first_round_records_without_accuracy(tmp_path, monkeyp
     assert (summary["diverged_round"], summary["rounds_completed"]) == (1, 0)
     assert summary["final_val_acc"] is None and summary["final_test_acc"] is None
     assert json.loads((tmp_path / "summary.json").read_text())["rounds_completed"] == 0
+
+
+
+def test_update_with_overflowing_norm_is_divergence_not_crash(tmp_path, monkeypatch):
+    # 서버가 non_finite로 거부해 실행 전체가 멈추던 경우: 제출 전에 서버와 같은 노름으로 확인해 발산으로 처리한다
+    summary = _metrics_run(tmp_path, monkeypatch, rounds=3, huge_update_at=2)
+
+    assert (summary["diverged_round"], summary["rounds_completed"]) == (2, 1)

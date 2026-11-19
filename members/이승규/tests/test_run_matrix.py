@@ -47,7 +47,7 @@ def test_command_always_evaluates_test_and_sets_attack_flag():
     assert attack[attack.index("--name") + 1] == "m/delay-attack-median-s1"
 
 
-SUMMARY = json.dumps({"final_val_acc": 0.4, "final_test_acc": 0.5})
+SUMMARY = json.dumps({"final_val_acc": 0.4, "final_test_acc": 0.5, "rounds_completed": 40})
 
 
 def saved_config(expected: dict, **server) -> dict:
@@ -171,7 +171,7 @@ def test_summary_without_test_acc_is_incomplete(tmp_path):
 def test_summary_with_bad_test_acc_is_incomplete(tmp_path, value):
     run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
     expected = expected_config(run, "m", rounds=None)
-    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": 0.4, "final_test_acc": value}))
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": 0.4, "final_test_acc": value, "rounds_completed": 40}))
 
     status, problems = run_status(tmp_path / run.name, expected)
 
@@ -182,7 +182,7 @@ def test_summary_with_bad_test_acc_is_incomplete(tmp_path, value):
 def test_summary_accepts_accuracy_bounds(tmp_path, value):
     run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
     expected = expected_config(run, "m", rounds=None)
-    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": value, "final_test_acc": value}))
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps({"final_val_acc": value, "final_test_acc": value, "rounds_completed": 40}))
 
     assert run_status(tmp_path / run.name, expected) == ("done", [])
 
@@ -421,3 +421,16 @@ def test_result_from_other_commit_is_done_with_warning(tmp_path):
 
     assert run_status(tmp_path / run.name, expected, current_env=current) == ("done", [])
     assert commit_changed(tmp_path / run.name, current)
+
+
+
+@pytest.mark.parametrize("completed", [None, 0, 39])
+def test_normal_run_with_wrong_rounds_completed_is_incomplete(tmp_path, completed):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    summary = {**json.loads(SUMMARY), "rounds_completed": completed}
+    write_result(tmp_path / run.name, saved_config(expected), json.dumps(summary))
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and "rounds_completed" in problems[0]

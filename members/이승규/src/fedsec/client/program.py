@@ -211,6 +211,14 @@ def updates_to_submit(normal: dict[int, State], plan: ClientPlan) -> dict[int, S
     return {**normal, **collusion_vectors(normal, plan.malicious, plan.attack_scale)}
 
 
+
+def check_submittable(updates: dict[int, State]) -> None:
+    """서버가 non_finite로 거부할 업데이트(원소는 유한해도 노름이 넘침, 공격 벡터 × scale 포함)는 제출 전에 발산으로 본다.
+    서버와 같은 update_norm으로 판정하고, 아무것도 보내기 전이라 서버 상태는 그대로다."""
+    broken = [cid for cid, update in updates.items() if not math.isfinite(update_norm(update))]
+    if broken:
+        raise TrainingDiverged(f"클라이언트 {broken}의 제출할 업데이트 노름이 float32 범위를 넘습니다 (발산).")
+
 def submit_all(api: ServerApi, snapshot: Snapshot, updates: dict[int, State], trained: dict[int, Trained],
                plan: ClientPlan, device: torch.device) -> dict[int, Sent]:
     finish = virtual_finish_times({cid: t.result.num_samples for cid, t in trained.items()}, plan.delayed, plan.timing)
@@ -304,7 +312,9 @@ def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, client
     t_start = timed_now(device)
     trained = train_participants(model, snapshot, clients, cfg, device)
     normal = {cid: t.result.update for cid, t in trained.items()}
-    sent = submit_all(api, snapshot, updates_to_submit(normal, plan), trained, plan, device)
+    to_submit = updates_to_submit(normal, plan)
+    check_submittable(to_submit)
+    sent = submit_all(api, snapshot, to_submit, trained, plan, device)
     t_aggregate = timed_now(device)
     record = api.aggregate()
     next_snapshot = fetch_snapshot(api, device, snapshot.round + 1)
