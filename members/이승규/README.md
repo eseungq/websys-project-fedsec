@@ -12,7 +12,7 @@
 
 ```bash
 cd members/이승규
-pip install -e .                                      # 설치 (의존성 목록은 requirements.txt)
+pip install -e ".[test]"                              # 설치 (torch, torchvision, PyYAML + pytest)
 python -m pytest -q                                   # 테스트 (13개)
 python scripts/run_experiment.py --name baseline      # 실험 1회 (configs/base.yaml 그대로)
 python scripts/run_experiment.py --name lr0.02 --lr 0.02 --rounds 10   # 옵션으로 값 바꾸기
