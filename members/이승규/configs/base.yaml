@@ -1,9 +1,9 @@
-# 이승규 기준 설정 (임시). 바꾸면 docs/학습설정-결과.md에 근거를 남깁니다.
+# 이승규 기준 설정 (임시). 바꾸면 docs/1_학습설정-결과.md에 근거를 남깁니다.
 # split, data_root는 레포 루트 기준 경로 (팀 공용 분할 파일·데이터)
 seed: 0
 split: configs/splits/iid_seed0.json
 data_root: data
-rounds: 40                   # 학습률 비교 결과 (docs/학습설정-결과.md 실험 1, 5)
+rounds: 40                   # 학습률 비교 결과 (docs/1_학습설정-결과.md 실험 1, 5)
 
 model: simple_cnn            # BatchNorm 없는 작은 CNN
 
@@ -11,7 +11,7 @@ train:
   optimizer: sgd
   lr: 0.01
   momentum: 0.9              # 라운드마다 새 옵티마이저 → momentum은 로컬 학습 안에서만 누적
-  weight_decay: 0.0
+  weight_decay: 0.0005       # 학습 설정 결과 (docs/1_학습설정-결과.md 실험 4, 5)
   local_ep: 1
   local_bs: 32
 

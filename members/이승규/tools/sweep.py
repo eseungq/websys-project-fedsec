@@ -33,8 +33,21 @@ INT_OPTIONS = ("seed", "rounds", "local_ep", "local_bs")
 TOP_OPTIONS = ("seed", "rounds")       # 나머지 옵션은 train 아래 값
 
 
+INT_TEXT = re.compile(r"[+-]?[0-9]+")
+
+
 def whole_number(value) -> int:
-    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (load_config와 같음)."""
+    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (load_config와 같음). true/false도 거부."""
+    if isinstance(value, bool):
+        raise ValueError(f"정수여야 합니다: {value!r}")
+    if isinstance(value, int):
+        return value  # float를 거치면 2**53보다 큰 값이 바뀌므로 그대로 돌려준다
+    if isinstance(value, str):
+        if INT_TEXT.fullmatch(value.strip()):
+            return int(value)   # int()는 "1_0"도 10으로 받으므로 숫자만 있는지 먼저 본다
+        if "_" in value:   # float()도 "1_0"을 10.0으로 받는다
+            raise ValueError(f"정수여야 합니다: {value!r}")
+        # "1.0" 같은 문자열은 아래에서 소수 부분을 확인한다
     number = float(value)
     if not number.is_integer():
         raise ValueError(f"정수여야 합니다: {value!r}")
@@ -189,7 +202,7 @@ def run_sweep(runs: list[dict], root: Path, python: str, dry_run: bool = False) 
         print(f"{label} 실행: {' '.join(cmd[1:])}", flush=True)
         if dry_run:
             continue
-        result = subprocess.run(cmd, cwd=root)
+        result = subprocess.run(cmd, check=False, cwd=root)
         if result.returncode != 0 or not (out_dir / "summary.json").exists():
             print(f"{label} 실패 (종료 코드 {result.returncode}). 여기서 멈춥니다.", flush=True)
             return 1

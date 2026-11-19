@@ -11,9 +11,9 @@ from fedsec.experiment.config import load_config
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMBER_ROOT / "tools"))
-from sweep import config_mismatches, expected_config  # noqa: E402
+from sweep import config_mismatches, expected_config
 
-from .test_config import BASE_TEXT, write_base  # noqa: E402
+from .test_config import write_base
 
 
 def saved_config(path, options):

@@ -1,0 +1,13 @@
+split: configs/splits/iid_seed0.json
+data_root: data
+client: 0
+images:
+- 27
+model_seed: 0
+dummy_seed: 1
+noise_seed: 0
+sigmas:
+- 0.01
+iterations:
+- 300
+record_every: 10

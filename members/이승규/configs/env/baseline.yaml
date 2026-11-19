@@ -1,0 +1,21 @@
+# 기준 환경: 참여율 100%, 지연 없음, IID. 다른 환경은 이 파일에서 한 항목만 바꾼다.
+# 학습 설정은 configs/base.yaml. split은 레포 루트 기준 경로.
+name: baseline
+split: configs/splits/iid_seed0.json
+per_round: null              # null이면 매 라운드 전원 참여
+
+malicious:                   # 공격을 켠 실험에서만 조작. ids를 적으면 시드 선택 대신 사용
+  count: 2
+  ids: null
+delayed:
+  count: 0
+  ids: null
+  avoid_malicious: true     # 지연 ID를 악성이 아닌 클라이언트 중에서 뽑음 (겹치면 지연·공격 효과가 섞임)
+
+virtual_time:                # 실제 실행 시간과 별개인 가상 시각
+  base_time: 1.0             # 표본 base_samples장 학습에 드는 가상 시간 (표본 수에 비례)
+  base_samples: 4500
+  delay: 2.0                 # 지연 클라이언트에만 더함 → 1.0 + 2.0 = 3.0 > 마감
+  deadline: 1.5              # 정상 1.0은 채택, 지연 3.0은 late로 제외
+
+min_accepted: 3              # 채택이 이보다 적으면 모델을 갱신하지 않음

@@ -46,7 +46,9 @@ def timed_now(device: torch.device) -> float:
 def git_commit() -> dict:
     try:
         commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True).stdout != ""
+        # 추적 중인 파일의 수정만 본다 (앞서 끝난 실행의 결과 폴더가 untracked로 잡혀 항상 dirty가 되지 않게)
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True,
+                               check=True).stdout != ""
     except (OSError, subprocess.CalledProcessError):
         return {"commit": "unknown", "dirty": None}
     return {"commit": commit, "dirty": dirty}

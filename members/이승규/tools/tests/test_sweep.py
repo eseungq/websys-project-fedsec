@@ -2,7 +2,6 @@ import sys
 
 import pytest
 import yaml
-
 from sweep import build_command, config_mismatches, expected_config, parse_plan, run_status, run_sweep
 
 # run_experiment.py 대신 쓰는 가짜: base.yaml에 옵션을 덮어쓴 설정과 summary.json만 쓰고,
@@ -137,6 +136,16 @@ def test_expected_config_rejects_fractional_integer(value):
     with pytest.raises(ValueError, match="정수여야 합니다"):
         expected_config({**BASE, "train": {**BASE["train"], "local_ep": value}}, {})
 
+
+
+@pytest.mark.parametrize("value", [9007199254740993, "9007199254740993"])
+def test_expected_config_keeps_large_seed_exact(value):
+    assert expected_config({**BASE, "seed": value}, {})["seed"] == 9007199254740993
+
+
+def test_expected_config_rejects_bool_integer():
+    with pytest.raises(ValueError, match="정수여야 합니다"):
+        expected_config({**BASE, "train": {**BASE["train"], "local_ep": True}}, {})
 
 def test_expected_config_rejects_missing_required_key():
     train = {k: v for k, v in BASE["train"].items() if k != "weight_decay"}
@@ -274,3 +283,9 @@ def test_run_sweep_stops_when_base_misses_required_key_before_reusing_result(roo
 
     assert result == 1
     assert "필수 항목이 없습니다: weight_decay" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("value", ["1_0", "0x10"])
+def test_expected_config_rejects_integer_text_with_separators(value):
+    with pytest.raises(ValueError):
+        expected_config({**BASE, "train": {**BASE["train"], "local_ep": value}}, {})

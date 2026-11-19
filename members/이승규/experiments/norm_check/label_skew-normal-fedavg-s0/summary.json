@@ -1,0 +1,15 @@
+{
+  "final_val_acc": 0.7436,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 40.0,
+  "first_round_sec": 4.085,
+  "mean_round_sec_after_first": 4.018,
+  "mean_comm_sec": 0.153,
+  "total_sec": 160.8,
+  "runner": "server",
+  "experiment": "norm_check/label_skew-normal-fedavg-s0",
+  "env": "label_skew",
+  "attack": false,
+  "aggregator": "fedavg",
+  "seed": 0
+}

@@ -1,0 +1,10 @@
+# 공격·방어 설정. 학습 설정은 configs/base.yaml, 운영 환경은 configs/env/*.yaml.
+# 명령줄(--attack/--no-attack, --aggregator, --clip-norm, --clip-before-median)로 덮어쓸 수 있다.
+attack:
+  enabled: false             # 악성 클라이언트(환경 파일의 malicious)가 공모 공격을 하는지
+  scale: -5.0                # 같은 라운드 악성들의 정상 업데이트 평균 × scale을 각자 제출 (명세 -5)
+
+defense:
+  aggregator: fedavg         # fedavg | clip_fedavg | median
+  clip_norm: 3.5             # 정상 업데이트 노름 90% 지점 근처 (docs/1_학습설정-결과.md, 비교 실험 전체에서 고정)
+  clip_before_median: false  # 중앙값 전 클리핑. 두 방어를 따로 비교하려고 기본은 끔

@@ -2,10 +2,18 @@ import json
 
 import pytest
 import yaml
-
 from summarize import (
-    best_val, last_mean, load_run, min_val_loss_round, norm_stats, plateau_round, round_times,
-    summarize_run, to_csv, to_markdown, val_at_epochs,
+    best_val,
+    last_mean,
+    load_run,
+    min_val_loss_round,
+    norm_stats,
+    plateau_round,
+    round_times,
+    summarize_run,
+    to_csv,
+    to_markdown,
+    val_at_epochs,
 )
 
 

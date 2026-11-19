@@ -8,8 +8,9 @@
 
 import argparse
 import json
-import sys
 from pathlib import Path
+
+from run_clients import new_out_dir
 
 from fedsec.experiment.config import load_config
 from fedsec.experiment.runner import run_fedavg
@@ -34,9 +35,7 @@ def main() -> None:
                         help="마지막에 공식 테스트셋도 평가 (설정 확정 후에만. 설정 비교는 검증 정확도로)")
     args = parser.parse_args()
 
-    out_dir = MEMBER_ROOT / "experiments" / args.name
-    if out_dir.exists():
-        sys.exit(f"이미 있는 결과 폴더입니다: {out_dir.relative_to(MEMBER_ROOT)} (다른 --name을 쓰세요)")
+    out_dir = new_out_dir(args.name)
 
     overrides = {k: getattr(args, k) for k in ("seed", "rounds", "lr", "momentum", "weight_decay", "local_ep", "local_bs")}
     cfg = load_config(MEMBER_ROOT / args.config).with_overrides(**overrides)

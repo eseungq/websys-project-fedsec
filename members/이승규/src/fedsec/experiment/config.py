@@ -1,5 +1,7 @@
 """실험 설정 파일(YAML)을 읽고 값이 올바른지 확인한다."""
 
+import math
+import re
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -28,11 +30,17 @@ class ExperimentConfig:
         return _validated(replace(self, **top, train=replace(self.train, **train)))
 
 
+# 라운드·클라이언트별 시드(runtime.client_generator: seed × 10⁸ + …)가 torch 시드 범위(2⁶³ 미만)를 넘지 않는 값
+MAX_SEED = 2**32 - 1
+
+
 def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     t = cfg.train
     checks = [
+        (0 <= cfg.seed <= MAX_SEED, f"seed는 0 이상 {MAX_SEED} 이하여야 합니다."),
         (cfg.rounds > 0, "rounds는 1 이상이어야 합니다."),
         (cfg.eval_bs > 0, "eval_bs는 1 이상이어야 합니다."),
+        (all(math.isfinite(v) for v in (t.lr, t.momentum, t.weight_decay)), "lr, momentum, weight_decay는 유한한 숫자여야 합니다."),
         (t.lr > 0, "lr은 양수여야 합니다."),
         (0 <= t.momentum < 1, "momentum은 0 이상 1 미만이어야 합니다."),
         (t.weight_decay >= 0, "weight_decay는 0 이상이어야 합니다."),
@@ -45,8 +53,21 @@ def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
+INT_TEXT = re.compile(r"[+-]?[0-9]+")
+
+
 def whole_number(value) -> int:
-    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (int()는 조용히 버림)."""
+    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (int()는 조용히 버림). true/false도 거부."""
+    if isinstance(value, bool):
+        raise ValueError(f"정수여야 합니다: {value!r}")
+    if isinstance(value, int):
+        return value  # float를 거치면 2**53보다 큰 값이 바뀌므로 그대로 돌려준다
+    if isinstance(value, str):
+        if INT_TEXT.fullmatch(value.strip()):
+            return int(value)   # int()는 "1_0"도 10으로 받으므로 숫자만 있는지 먼저 본다
+        if "_" in value:   # float()도 "1_0"을 10.0으로 받는다
+            raise ValueError(f"정수여야 합니다: {value!r}")
+        # "1.0" 같은 문자열은 아래에서 소수 부분을 확인한다
     number = float(value)
     if not number.is_integer():
         raise ValueError(f"정수여야 합니다: {value!r}")
@@ -57,8 +78,71 @@ def whole_number(value) -> int:
 TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": whole_number, "local_bs": whole_number}
 
 
+AGGREGATORS = ("fedavg", "clip_fedavg", "median")
+
+
+@dataclass(frozen=True)
+class AttackDefenseConfig:
+    """공격·방어 설정 (configs/attack_defense.yaml). 학습 설정(base.yaml)과 따로 둔다."""
+    attack: bool               # 악성 클라이언트의 공모 공격 켜기
+    attack_scale: float        # 악성 정상 업데이트 평균에 곱하는 값 (명세 -5)
+    aggregator: str            # fedavg | clip_fedavg | median
+    clip_norm: float           # clip_fedavg(와 clip_before_median)의 노름 상한
+    clip_before_median: bool   # 중앙값 전에 클리핑할지
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def with_overrides(self, **overrides) -> "AttackDefenseConfig":
+        """None이 아닌 값만 바꾼 새 설정 (명령줄 덮어쓰기)."""
+        return _validated_attack_defense(replace(self, **{k: v for k, v in overrides.items() if v is not None}))
+
+
+def _validated_attack_defense(cfg: AttackDefenseConfig) -> AttackDefenseConfig:
+    if cfg.aggregator not in AGGREGATORS:
+        raise ValueError(f"설정 오류: aggregator는 {', '.join(AGGREGATORS)} 중 하나여야 합니다: {cfg.aggregator}")
+    if not (math.isfinite(cfg.clip_norm) and cfg.clip_norm > 0):
+        raise ValueError(f"설정 오류: clip_norm은 유한한 양수여야 합니다: {cfg.clip_norm}")
+    if not (math.isfinite(cfg.attack_scale) and cfg.attack_scale != 0):
+        raise ValueError(f"설정 오류: attack.scale은 0이 아닌 유한한 숫자여야 합니다: {cfg.attack_scale}")
+    if not isinstance(cfg.attack, bool) or not isinstance(cfg.clip_before_median, bool):
+        raise ValueError("설정 오류: attack과 clip_before_median은 true/false여야 합니다.")
+    return cfg
+
+
+ATTACK_DEFENSE_KEYS = {"attack": frozenset({"enabled", "scale"}),
+                       "defense": frozenset({"aggregator", "clip_norm", "clip_before_median"})}
+
+
+def load_attack_defense(path: Path) -> AttackDefenseConfig:
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    sections = raw if isinstance(raw, dict) else {}
+    unknown = sorted(set(sections) - set(ATTACK_DEFENSE_KEYS))
+    for name, keys in ATTACK_DEFENSE_KEYS.items():
+        section = sections.get(name)
+        unknown += [f"{name}.{key}" for key in sorted(set(section) - keys)] if isinstance(section, dict) else []
+    if unknown:
+        raise ValueError(f"공격·방어 설정 파일 {path}에 모르는 항목이 있습니다: {unknown}")
+    try:
+        cfg = AttackDefenseConfig(
+            attack=raw["attack"]["enabled"], attack_scale=float(raw["attack"]["scale"]),
+            aggregator=str(raw["defense"]["aggregator"]), clip_norm=float(raw["defense"]["clip_norm"]),
+            clip_before_median=raw["defense"]["clip_before_median"],
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"공격·방어 설정 파일 {path}의 항목이 잘못되었습니다: {error}") from error
+    return _validated_attack_defense(cfg)
+
+
+CONFIG_KEYS = frozenset({"seed", "split", "data_root", "rounds", "model", "train", "eval_bs"})
+
+
 def load_config(path: Path) -> ExperimentConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or set(raw) != CONFIG_KEYS or not isinstance(raw["train"], dict):
+        found = set(raw) if isinstance(raw, dict) else set()
+        raise ValueError(f"설정 파일 {path}: 빠진 항목 {sorted(CONFIG_KEYS - found)}, 모르는 항목 {sorted(found - CONFIG_KEYS)}"
+                         " (train은 항목 묶음이어야 함)")
     train = dict(raw["train"])
     optimizer = train.pop("optimizer", "sgd")
     if optimizer != "sgd":
