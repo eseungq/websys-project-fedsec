@@ -111,18 +111,12 @@ class ServerState:
             self._record_exclusion(None, rejection)
         return rejection
 
-    def reject_bad_json(self, detail: str) -> Rejection:
-        """JSON이 아닌 본문으로 온 제출 (client_id를 알 수 없음)."""
-        rejection = Rejection("bad_json", detail)
-        with self._lock:
-            self._record_exclusion(None, rejection)
-        return rejection
-
     def _record_exclusion(self, payload, rejection: Rejection) -> None:
         fields = payload if isinstance(payload, dict) else {}
         record = {
-            "time": _now(), "round": self.round, "client_id": fields.get("client_id"),
-            "submitted_round": fields.get("round"), "submitted_version": fields.get("model_version"),
+            "time": _now(), "round": self.round, "client_id": _int_or_none(fields.get("client_id")),
+            "submitted_round": _int_or_none(fields.get("round")),
+            "submitted_version": _int_or_none(fields.get("model_version")),
             "reason": rejection.reason, "detail": rejection.detail,
         }
         self.exclusions = [*self.exclusions, record]
@@ -144,12 +138,12 @@ class ServerState:
                 aggregate_norm = round(update_norm(aggregated), 4)
             record = {**self._round_record(accepted, skip_reason, time.perf_counter() - t_start),
                       "model_version": new_version, "aggregate_norm": aggregate_norm}
+            if self._log:
+                self._log.log_round(record)   # 기록에 실패하면 상태를 바꾸지 않는다 (서버 기록과 상태가 어긋나지 않게)
             self.global_state, self.model_version = new_state, new_version
             self.history = [*self.history, record]
             self.round += 1
             self.pending = {}
-            if self._log:
-                self._log.log_round(record)
             return record
 
     def _skip_reason(self, num_accepted: int) -> str | None:
@@ -195,3 +189,8 @@ class ServerState:
                 "config": self.config,
                 "history": self.history, "exclusions": self.exclusions,
             }
+
+
+def _int_or_none(value) -> int | None:
+    """제외 기록에는 검증 전 값 중 정수만 남긴다 (큰 문자열·CSV 수식이 기록에 그대로 들어가지 않게)."""
+    return value if type(value) is int else None

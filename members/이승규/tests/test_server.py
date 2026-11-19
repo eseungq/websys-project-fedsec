@@ -154,12 +154,33 @@ def test_invalid_submission_is_excluded_with_reason(body, reason, status):
     assert state.exclusions[-1]["round"] == 1
 
 
-def test_non_json_body_is_bad_json():
-    _state, client = _server()
+def test_non_json_body_is_refused_without_record():
+    # 다른 사이트의 페이지가 preflight 없이 보내는 단순 요청이 서버 제외 기록을 계속 늘리지 못하게 기록하지 않는다
+    state, client = _server()
 
     reply = client.post("/update", data="not json", content_type="text/plain")
 
-    assert reply.get_json()["data"]["reason"] == "bad_json"
+    assert reply.status_code == 415
+    assert state.exclusions == []
+
+
+def test_exclusion_record_keeps_only_integer_fields():
+    # 검증 전 값이 그대로 남으면 큰 문자열이 기록을 키우거나, CSV 수식(=...)이 표 프로그램에서 실행될 수 있다
+    state, client = _server()
+
+    client.post("/update", json={"client_id": "=HYPERLINK(\"x\")" + "a" * 10_000, "round": [1], "model_version": True})
+
+    record = state.exclusions[-1]
+    assert (record["client_id"], record["submitted_round"], record["submitted_version"]) == (None, None, None)
+
+
+def test_server_log_escapes_formula_cells(tmp_path):
+    from fedsec.logger.server_log import ServerLog
+
+    log = ServerLog(tmp_path / "server")
+    log.log_exclusion({"round": 1, "reason": "bad_type", "detail": "=1+1"})
+
+    assert "'=1+1" in (tmp_path / "server" / "exclusions.csv").read_text(encoding="utf-8")
 
 
 def test_oversized_request_is_rejected_before_parsing():
@@ -341,7 +362,7 @@ def test_non_json_post_cannot_close_round():
     assert client.post("/aggregate").status_code == 415
     assert client.post("/aggregate", data={"a": "1"}).status_code == 415
     assert state.round == 1
-    assert client.post("/update", data={"client_id": "0"}).get_json()["data"]["reason"] == "bad_json"
+    assert client.post("/update", data={"client_id": "0"}).status_code == 415
 
 
 def test_server_log_refuses_folder_with_previous_records(tmp_path):
@@ -351,3 +372,32 @@ def test_server_log_refuses_folder_with_previous_records(tmp_path):
 
     with pytest.raises(FileExistsError):   # 이어 쓰면 이전 실행의 라운드 1과 섞임
         ServerLog(tmp_path)
+
+
+def test_failed_round_log_leaves_server_state_unchanged():
+    class BrokenLog:
+        def log_round(self, record):
+            raise OSError("디스크 가득 참")
+
+        def log_exclusion(self, record):
+            pass
+
+    state, client = _server(log=BrokenLog())
+    _submit_all(client, [_delta(0.1, 0.1, 0.1)] * NUM_CLIENTS, [100] * NUM_CLIENTS)
+
+    with pytest.raises(OSError):
+        state.aggregate()
+    assert (state.round, state.model_version, state.history) == (1, 0, [])
+
+
+@pytest.mark.parametrize("host", ["localhost:8765", "127.0.0.1", "localhost"])
+def test_local_hosts_are_allowed(host):
+    _, client = _server()
+
+    assert client.get("/status", headers={"Host": host}).status_code == 200
+
+
+def test_num_samples_at_limit_is_accepted():
+    _, client = _server()
+
+    assert client.post("/update", json=_payload(0, num_samples=50_000)).get_json()["ok"]

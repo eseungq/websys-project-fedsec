@@ -13,7 +13,7 @@ import argparse
 from dataclasses import replace
 from pathlib import Path
 
-from run_clients import DEFAULT_NUM_CLIENTS, add_scenario_args, load_scenario
+from run_clients import DEFAULT_NUM_CLIENTS, EXPERIMENTS_DIR, add_scenario_args, inside, load_scenario
 
 from fedsec.experiment.config import load_config
 from fedsec.logger.server_log import ServerLog
@@ -41,7 +41,8 @@ def main() -> None:
     if args.min_accepted is not None:
         env = replace(env, min_accepted=args.min_accepted)
     policy = scenario_policy(env, build_defense(attack_defense), cfg.seed, args.num_clients)
-    log = ServerLog(MEMBER_ROOT / args.log_dir) if args.log_dir else None
+    # 결과 폴더와 같이 experiments/ 아래만 (절대 경로로 받아도 그 안이어야 함)
+    log = ServerLog(inside(EXPERIMENTS_DIR, str((MEMBER_ROOT / args.log_dir).resolve()))) if args.log_dir else None
     defense = {key: value for key, value in attack_defense.to_dict().items() if not key.startswith("attack")}
     state = ServerState(initial_global_state(cfg.seed, cfg.model), num_clients=args.num_clients, policy=policy, log=log,
                         config={"seed": cfg.seed, "model": cfg.model, "config_file": args.config,

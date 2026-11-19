@@ -10,6 +10,7 @@ import pytest
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMBER_ROOT / "scripts"))
 import yaml
+from run_clients import EXPERIMENTS_DIR
 from run_matrix import NUM_CLIENTS, Run, expected_config, index_rows, plan_runs, run_status
 
 from fedsec.experiment.config import AGGREGATORS
@@ -246,3 +247,28 @@ def test_diverged_round_outside_rounds_is_incomplete(tmp_path, value):
     status, problems = run_status(tmp_path / run.name, expected)
 
     assert status == "incomplete" and problems[0].startswith("summary.json의 diverged_round가")
+
+
+@pytest.mark.parametrize("name", ["../outside", "/tmp/outside", ".", "x/..", "dlg_run.partial"])
+def test_result_folder_must_stay_under_base(tmp_path, name):
+    from run_clients import inside
+
+    with pytest.raises(SystemExit):
+        inside(EXPERIMENTS_DIR, name)
+
+
+def test_result_folder_under_base_is_accepted():
+    from run_clients import inside
+
+    assert inside(EXPERIMENTS_DIR, "matrix/baseline-normal-fedavg-s0") == \
+        (EXPERIMENTS_DIR / "matrix" / "baseline-normal-fedavg-s0").resolve()
+
+
+@pytest.mark.parametrize("text", ["0", "-1", "2.5"])
+def test_rounds_option_rejects_non_positive(text):
+    import argparse
+
+    from run_matrix import positive_int
+
+    with pytest.raises((argparse.ArgumentTypeError, ValueError)):   # argparse는 둘 다 잘못된 값으로 처리
+        positive_int(text)

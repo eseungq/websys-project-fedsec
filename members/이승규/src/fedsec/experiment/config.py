@@ -110,8 +110,19 @@ def _validated_attack_defense(cfg: AttackDefenseConfig) -> AttackDefenseConfig:
     return cfg
 
 
+ATTACK_DEFENSE_KEYS = {"attack": frozenset({"enabled", "scale"}),
+                       "defense": frozenset({"aggregator", "clip_norm", "clip_before_median"})}
+
+
 def load_attack_defense(path: Path) -> AttackDefenseConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    sections = raw if isinstance(raw, dict) else {}
+    unknown = sorted(set(sections) - set(ATTACK_DEFENSE_KEYS))
+    for name, keys in ATTACK_DEFENSE_KEYS.items():
+        section = sections.get(name)
+        unknown += [f"{name}.{key}" for key in sorted(set(section) - keys)] if isinstance(section, dict) else []
+    if unknown:
+        raise ValueError(f"공격·방어 설정 파일 {path}에 모르는 항목이 있습니다: {unknown}")
     try:
         cfg = AttackDefenseConfig(
             attack=raw["attack"]["enabled"], attack_scale=float(raw["attack"]["scale"]),

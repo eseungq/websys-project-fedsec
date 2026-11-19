@@ -58,7 +58,8 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 
 ## API
 모든 응답은 `{"ok": true/false, "data": ..., "error": 문자열 또는 null}` 형식이다.
-- Host 헤더가 `127.0.0.1`·`localhost`가 아니면 403. POST는 `Content-Type: application/json`만 받는다(`/aggregate`도 빈 객체 `{}`를 보냄). 같은 PC의 브라우저를 통한 요청 위조를 막기 위해서다
+- Host 헤더가 `127.0.0.1`·`localhost`가 아니면 403. POST는 `Content-Type: application/json`만 받고, 아니면 제외 기록 없이 415(`/aggregate`도 빈 객체 `{}`를 보냄). 같은 PC의 브라우저를 통한 요청 위조와 기록 부풀리기를 막기 위해서다
+- 제외 기록(`exclusions.csv`)의 `client_id`·제출 라운드·버전은 정수일 때만 남긴다. `=`·`+`·`-`·`@`로 시작하는 칸은 앞에 `'`를 붙여 표 프로그램이 수식으로 실행하지 않게 한다
 - 제외 사유 문장(`error`)은 200자에서 자른다
 
 ### `GET /status`

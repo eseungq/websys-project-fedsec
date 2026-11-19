@@ -21,7 +21,7 @@ from pathlib import Path
 import torch
 import yaml
 from PIL import Image, ImageDraw
-from run_clients import new_out_dir
+from run_clients import PARTIAL_SUFFIX, new_out_dir
 from torchvision.datasets import CIFAR10
 from torchvision.utils import save_image
 
@@ -207,7 +207,7 @@ def main() -> None:
     cfg = _validated(replace(cfg, **overrides))
 
     # 임시 폴더에 다 쓴 뒤 이름을 바꾼다 (중간에 실패하면 반쪽 결과 폴더가 같은 --name을 막지 않게)
-    final_dir, out_dir = out_dir, out_dir.with_name(out_dir.name + ".partial")
+    final_dir, out_dir = out_dir, out_dir.with_name(out_dir.name + PARTIAL_SUFFIX)
     if out_dir.exists():
         sys.exit(f"이전에 실패한 임시 폴더가 있습니다. 확인 후 지우세요: {out_dir.relative_to(MEMBER_ROOT)}")
     results, trajectory = run_all(cfg, out_dir)

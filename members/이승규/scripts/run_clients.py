@@ -92,11 +92,16 @@ def client_setup(args: argparse.Namespace) -> tuple[ExperimentConfig, ClientPlan
 EXPERIMENTS_DIR = MEMBER_ROOT / "experiments"
 
 
+PARTIAL_SUFFIX = ".partial"   # run_dlg.py가 끝나기 전에 쓰는 임시 폴더 이름
+
+
 def inside(base: Path, name: str) -> Path:
     """base 아래 결과 폴더. ../나 절대 경로로 base 밖을 가리키면 멈춘다."""
     out_dir = (base / name).resolve()
     if out_dir == base.resolve() or not out_dir.is_relative_to(base.resolve()):
         sys.exit(f"결과 폴더는 {base.relative_to(MEMBER_ROOT)}/ 아래여야 합니다: {name}")
+    if out_dir.name.endswith(PARTIAL_SUFFIX):
+        sys.exit(f"결과 폴더 이름은 {PARTIAL_SUFFIX}로 끝날 수 없습니다 (DLG 임시 폴더와 겹침): {name}")
     return out_dir
 
 

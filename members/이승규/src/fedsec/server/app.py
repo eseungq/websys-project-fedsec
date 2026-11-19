@@ -39,9 +39,8 @@ def create_app(state: ServerState) -> Flask:
         if host not in ALLOWED_HOSTS:
             return _reply(None, f"허용되지 않은 Host입니다: {request.host[:100]}", 403)
         # POST는 JSON만 받는다. 브라우저가 preflight 없이 보내는 단순 요청(form, text/plain)을 막는다
+        # 제외 기록도 남기지 않는다 (다른 사이트의 페이지가 기록을 계속 늘리지 못하게)
         if request.method == "POST" and not request.is_json:
-            if request.path == "/update":
-                return _rejection_reply(state.reject_bad_json("Content-Type이 application/json이 아닙니다."))
             return _reply(None, "Content-Type은 application/json이어야 합니다.", 415)
         return None
 

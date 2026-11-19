@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import pytest
 
-from fedsec.experiment.config import load_config
+from fedsec.experiment.config import load_attack_defense, load_config
+
+MEMBER_ROOT = Path(__file__).resolve().parents[1]
 
 BASE_TEXT = """
 seed: 0
@@ -85,3 +89,24 @@ def test_integer_text_with_separators_is_rejected(tmp_path, value):
 
     with pytest.raises(ValueError):
         load_config(path)
+
+
+
+def test_attack_defense_rejects_unknown_key(tmp_path):
+    # 오타 키(clip_norms)가 조용히 무시되고 기본 clip_norm으로 실행되던 문제
+    text = (MEMBER_ROOT / "configs" / "attack_defense.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "ad.yaml"
+    path.write_text(text.replace("  clip_norm: 3.5", "  clip_norms: 5\n  clip_norm: 3.5"), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="모르는 항목"):
+        load_attack_defense(path)
+
+
+@pytest.mark.parametrize("scale", ["0", ".inf", ".nan"])
+def test_attack_scale_must_be_finite_and_nonzero(tmp_path, scale):
+    text = (MEMBER_ROOT / "configs" / "attack_defense.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "ad.yaml"
+    path.write_text(text.replace("scale: -5.0", f"scale: {scale}"), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_attack_defense(path)

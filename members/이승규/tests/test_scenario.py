@@ -161,3 +161,9 @@ def test_defended_norms_are_rounded_without_clipping():
     record = client.post("/aggregate", json={}).get_json()["data"]
 
     assert record["defended_norms"] == record["update_norms"] == [1.4142] * 3
+
+
+@pytest.mark.parametrize("clip_norm", [float("inf"), float("nan")])
+def test_clip_norm_must_be_finite(clip_norm):
+    with pytest.raises(ValueError):
+        AD.with_overrides(aggregator="clip_fedavg", clip_norm=clip_norm)
