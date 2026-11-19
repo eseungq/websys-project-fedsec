@@ -1,8 +1,9 @@
-# 공통 기준 설정 (임시). 팀이 비교 실험으로 확정하면 docs/decisions/에 근거를 남기고 바꿉니다.
+# 이승규 기준 설정 (임시). 바꾸면 docs/001-baseline-setup.md에 근거를 남깁니다.
+# split, data_root는 레포 루트 기준 경로 (팀 공용 분할 파일·데이터)
 seed: 0
 split: configs/splits/iid_seed0.json
 data_root: data
-rounds: 40                   # 학습률 비교 결과 (docs/decisions/001-baseline-setup.md)
+rounds: 40                   # 학습률 비교 결과 (docs/001-baseline-setup.md)
 
 model: simple_cnn            # BatchNorm 없는 작은 CNN
 

@@ -8,7 +8,8 @@ from pathlib import Path
 
 from fedsec.data.split import make_iid_split, save_split
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+# 분할 파일은 팀 공용이라 레포 루트의 configs/splits/에 저장한다.
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def main() -> None:
