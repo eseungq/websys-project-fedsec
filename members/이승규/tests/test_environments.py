@@ -282,3 +282,14 @@ def test_delay_values_that_make_no_one_late_are_rejected():
     # delay 0.2면 지연 클라이언트도 1.2로 마감 1.5 안 → "지연" 환경이 사실상 기준 환경
     with pytest.raises(ValueError):
         check_delay_setting(SAMPLES, (0, 4, 9), replace(TIMING, delay=0.2))
+
+
+
+def test_ids_must_be_a_list(tmp_path):
+    # ids: "12"가 문자 하나씩 [1, 2]로 읽혀 다른 악성 클라이언트로 실행되던 문제
+    text = (ENV_DIR / "baseline.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "env.yaml"
+    path.write_text(text.replace("  ids: null", '  ids: "12"', 1), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="ids는 목록"):
+        load_env_config(path)

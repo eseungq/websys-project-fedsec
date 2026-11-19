@@ -37,6 +37,8 @@ def _role(raw: dict, key: str) -> tuple[int, tuple[int, ...] | None]:
     ids = role.get("ids")
     if ids is None:
         return count, None
+    if not isinstance(ids, list):   # 문자열 "12"가 문자 하나씩 [1, 2]로 읽히지 않게
+        raise ValueError(f"{key}.ids는 목록이어야 합니다 (예: [3, 7]): {ids!r}")
     fixed = tuple(whole_number(cid) for cid in ids)
     if len(fixed) != count:
         raise ValueError(f"{key}.ids 개수({len(fixed)})가 {key}.count({count})와 다릅니다.")

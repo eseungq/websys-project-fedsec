@@ -10,9 +10,10 @@
 - 끝난 실행(summary.json과 비교에 필요한 로그가 모두 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행
 - 단, 저장된 config.yaml이 지금 실행할 설정(base.yaml·환경·참여 수·최소 채택 수·공격·방어·라운드 수)과 다르면
   시작 전에 멈춘다 (예: --rounds 2로 확인한 결과를 40라운드 본 실험으로 착각하지 않게)
-- 끊긴 실행(summary.json 없음, 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님, rounds.csv·clients.csv 줄 수가
-  라운드 수와 맞지 않음, class_acc.csv·client_acc.csv에 라운드·분할·ID별 행이 빠지거나 중복됨, env.json을 읽을 수 없음,
-  정상 실행이 발산함)이 있으면 시작 전에 멈춘다
+- 끝난 실행의 기기·GPU 모델명·torch 버전이 지금과 다르면 멈춘다 (커밋만 다르면 경고). 같은 Mac에서 이어서 실행할 것
+- 끊긴 실행(summary.json 없음, 검증·테스트 정확도가 빠졌거나 0~1 사이 숫자가 아님, 로그(rounds·clients·class_acc·
+  client_acc)에 라운드·ID별 행이 빠지거나 중복되거나 파일을 읽을 수 없음, env.json을 읽을 수 없음, 정상 실행이 발산함)이
+  있으면 시작 전에 멈춘다
   → 그 폴더를 지우거나 옮긴 뒤 다시 실행
 - 공격 실험이 발산하면 발산 전 전역 모델로 평가해 끝난 실행으로 친다 (summary.json의 diverged_round).
   1라운드 집계 직후 발산하면 정확도 없는 diverged 상태로 끝난 실행으로 친다 (비교표에 넣지 않음)
@@ -39,6 +40,8 @@ from run_clients import (
     inside,
 )
 
+from fedsec.experiment.runtime import environment_info, pick_device
+
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 RUN_SCRIPT = Path(__file__).resolve().parent / "run_server_experiment.py"
 ENVS = ("baseline", "delay", "partial", "label_skew")
@@ -50,7 +53,8 @@ NUM_CLIENTS = DEFAULT_NUM_CLIENTS
 NUM_CLASSES = 10    # CIFAR-10. class_acc.csv는 라운드마다 클래스 10줄
 # 실행 환경 (기기가 다르면 같은 시드도 결과가 조금 다를 수 있어, 비교표에서 섞였는지 보이게 한다)
 RUN_ENV_KEYS = ("device", "gpu", "torch", "commit", "dirty")
-# 클래스별·클라이언트별 비교에 쓰는 로그와 라운드당 줄 수. 완료한 라운드마다 검증 행, 끝에 테스트 행이 있어야 한다
+RESUME_ENV_KEYS = ("device", "gpu", "torch")    # 이어서 실행할 때 같아야 하는 값 (env.json)
+# 클래스별·클라이언트별 비교에 쓰는 로그 (ID 열, 라운드당 줄 수). 완료한 라운드마다 검증 행, 끝에 테스트 행
 ACC_LOGS = {"class_acc.csv": ("class", NUM_CLASSES), "client_acc.csv": ("client", NUM_CLIENTS)}
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "diverged_round", "rounds_completed", "rounds_not_updated",
                 "total_virtual_time", "total_sec")
@@ -149,62 +153,55 @@ def output_problems(out_dir: Path, rounds: int) -> list[str]:
     """summary.json 말고도 비교에 필요한 산출물이 끝까지 쓰였는지.
 
     models/는 커밋하지 않으므로 보지 않는다. summary.json을 모델 저장 뒤에 쓰므로 끝까지 갔는지는 summary로 안다.
+    로그마다 키 조합이 정확히 한 줄씩 있어야 한다 (행 수만 세면 한 라운드가 빠지고 다른 라운드가 중복돼도 통과).
     """
-    problems = []
-    logged = _count_rows(out_dir / "rounds.csv")
-    if logged != rounds:
-        problems.append(f"rounds.csv가 {logged}줄 (설정 {rounds}라운드)")
-    logged = _count_rows(out_dir / "clients.csv")
-    if logged != rounds * NUM_CLIENTS:
-        problems.append(f"clients.csv가 {logged}줄 (설정 {rounds}라운드 × 클라이언트 {NUM_CLIENTS}명)")
+    done = range(1, rounds + 1)
+    problems = key_problems(out_dir / "rounds.csv", ("round",), {(r,) for r in done})
+    problems += key_problems(out_dir / "clients.csv", ("round", "client"),
+                             {(r, c) for r in done for c in range(NUM_CLIENTS)})
     for name, (id_key, per_round) in ACC_LOGS.items():
-        problems += acc_log_problems(out_dir / name, id_key, per_round, rounds)
+        expected = {(r, "val", i) for r in done for i in range(per_round)}
+        # 1라운드에 발산한 실행(rounds 0)은 평가할 모델이 없어 테스트 행도 없다
+        expected |= {(rounds, "test", i) for i in range(per_round)} if rounds > 0 else set()
+        problems += key_problems(out_dir / name, ("round", "split", id_key), expected)
     if not _read_json(out_dir / "env.json"):
         problems.append("env.json을 읽을 수 없음")
     return problems
 
 
-def acc_log_problems(path: Path, id_key: str, per_round: int, rounds: int) -> list[str]:
-    """평가 로그에 (라운드, 분할, 클래스·클라이언트 ID)마다 정확히 한 줄씩 있는지. 행 수만 세면 라운드가 통째로
-    빠지고 다른 라운드가 중복돼도 통과한다. 1라운드에 발산한 실행(rounds 0)은 평가할 모델이 없어 테스트 행도 없다."""
-    expected = {(r, "val", i) for r in range(1, rounds + 1) for i in range(per_round)}
-    expected |= {(rounds, "test", i) for i in range(per_round)} if rounds > 0 else set()
-    counts = Counter(_acc_keys(path, id_key))
+def key_problems(path: Path, columns: tuple[str, ...], expected: set[tuple]) -> list[str]:
+    """CSV에 columns 조합이 expected의 각 키마다 정확히 한 줄씩 있는지. 빠진·중복·예상 밖 행을 알려 준다."""
+    try:
+        with path.open(encoding="utf-8") as f:
+            counts = Counter(_row_key(row, columns) for row in csv.DictReader(f))
+    except FileNotFoundError:
+        counts = Counter()
+    except (OSError, UnicodeDecodeError, csv.Error) as error:
+        return [f"{path.name}를 읽을 수 없음 ({type(error).__name__})"]
     missing = sorted(expected - counts.keys())
     duplicated = sorted(key for key, n in counts.items() if n > 1 and key in expected)
     unexpected = sorted((key for key in counts if key not in expected), key=str)
-    parts = [f"{label} {len(keys)}개 (예: {_key_text(keys[0], id_key)})"
+    parts = [f"{label} {len(keys)}개 (예: {_key_text(keys[0], columns)})"
              for label, keys in (("빠진 행", missing), ("중복 행", duplicated), ("예상 밖 행", unexpected)) if keys]
     return [f"{path.name}: " + ", ".join(parts)] if parts else []
 
 
-def _acc_keys(path: Path, id_key: str) -> list[tuple]:
+def _row_key(row: dict, columns: tuple[str, ...]) -> tuple:
+    """split은 문자열, 나머지는 정수. 형식이 틀린 칸은 원래 문자열로 남아 예상 밖 행으로 잡힌다."""
+    return tuple(_as_int(row.get(column)) if column != "split" else row.get(column) for column in columns)
+
+
+def _as_int(value):
     try:
-        with path.open(encoding="utf-8") as f:
-            return [_acc_key(row, id_key) for row in csv.DictReader(f)]
-    except OSError:
-        return []
+        return int(value)
+    except (TypeError, ValueError):
+        return value
 
 
-def _acc_key(row: dict, id_key: str) -> tuple:
-    try:
-        return int(row["round"]), row["split"], int(row[id_key])
-    except (KeyError, TypeError, ValueError):
-        return row.get("round"), row.get("split"), row.get(id_key)   # 형식이 틀린 줄은 예상 밖 행으로 잡힌다
-
-
-def _key_text(key: tuple, id_key: str) -> str:
-    round_idx, split, item = key
-    return f"{round_idx}라운드 {split} {id_key} {item}"
-
-
-def _count_rows(path: Path) -> int:
-    try:
-        with path.open(encoding="utf-8") as f:
-            return sum(1 for _ in csv.DictReader(f))
-    except OSError:
-        return 0
-
+def _key_text(key: tuple, columns: tuple[str, ...]) -> str:
+    """(40, "val", 0) → "40라운드 val class 0"."""
+    words = [f"{key[0]}라운드"] + [str(v) if c == "split" else f"{c} {v}" for c, v in zip(columns[1:], key[1:])]
+    return " ".join(words)
 
 
 def diverged_problems(summary: dict, expected: dict) -> list[str]:
@@ -218,7 +215,21 @@ def diverged_problems(summary: dict, expected: dict) -> list[str]:
         return [f"summary.json의 rounds_completed {completed!r}가 diverged_round - 1({diverged - 1})과 다름"]
     return []
 
-def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
+def env_mismatches(out_dir: Path, current_env: dict) -> list[str]:
+    """이어서 실행할 때 기기·GPU·torch 버전이 다른 결과가 같은 묶음에 섞이지 않게. 커밋 차이는 막지 않는다.
+
+    MPS는 gpu가 비어 있어 서로 다른 Mac은 구분하지 못한다 (본 실험은 같은 Mac에서 재개한다는 전제).
+    """
+    saved = _read_json(out_dir / "env.json")
+    return [f"실행 환경이 다름: {key} {saved.get(key)!r} → 지금 {current_env.get(key)!r}"
+            for key in RESUME_ENV_KEYS if saved.get(key) != current_env.get(key)]
+
+
+def commit_changed(out_dir: Path, current_env: dict) -> bool:
+    return _read_json(out_dir / "env.json").get("commit") != current_env.get("commit")
+
+
+def run_status(out_dir: Path, expected: dict, current_env: dict | None = None) -> tuple[str, list[str]]:
     """("todo" | "incomplete" | "stale" | "done" | "diverged", 다른 설정 또는 빠진 결과 목록).
 
     done·diverged는 끝난 실행이다. diverged는 1라운드에 발산해 정확도가 없는 공격 실험 (비교표에서 따로 표시).
@@ -251,6 +262,9 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     problems = output_problems(out_dir, expected["rounds"] if diverged is None else diverged - 1)
     if problems:
         return "incomplete", problems
+    mismatches = env_mismatches(out_dir, current_env) if current_env is not None else []
+    if mismatches:
+        return "stale", mismatches
     return ("diverged", []) if at_start else ("done", [])
 
 
@@ -306,7 +320,14 @@ def main() -> None:
 
     runs = plan_runs(args.envs, args.attacks, args.aggregators, args.seeds)
     prefix_dir = inside(EXPERIMENTS_DIR, args.prefix)
-    checked = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds)) for run in runs}
+    current_env = environment_info(pick_device())
+    checked = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds), current_env)
+               for run in runs}
+    other_commit = [run.name for run in runs if checked[run][0] in FINISHED
+                    and commit_changed(prefix_dir / run.name, current_env)]
+    if other_commit:
+        print(f"참고: 끝난 실행 {len(other_commit)}회가 지금과 다른 커밋에서 돌았습니다 (runs.csv의 commit 열). "
+              f"계산 코드가 바뀌었다면 --prefix를 바꿔 다시 돌리세요. 예: {other_commit[0]}")
     statuses = {run: status for run, (status, _) in checked.items()}
     for i, run in enumerate(runs, 1):
         print(f"{i:>3}/{len(runs)} [{statuses[run]:>10}] {run.name}")

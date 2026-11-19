@@ -71,11 +71,12 @@ def write_result(out_dir, config, summary, rounds_logged=None, clients_logged=No
     n = config["rounds"] if rounds_logged is None else rounds_logged
     m = n * NUM_CLIENTS if clients_logged is None else clients_logged
     a = n if acc_rounds is None else acc_rounds
+    client_keys = [(r, c) for r in range(1, n + 2) for c in range(NUM_CLIENTS)]   # 라운드 × 클라이언트 (clients.csv)
     files = {
         "config.yaml": yaml.safe_dump(config, allow_unicode=True),
         "summary.json": summary,
         "rounds.csv": "round\n" + "".join(f"{r}\n" for r in range(1, n + 1)),
-        "clients.csv": "round\n" + "1\n" * m,
+        "clients.csv": "round,client\n" + "".join(f"{r},{c}\n" for r, c in client_keys[:m]),
         "class_acc.csv": _acc_lines("round,split,class", a, NUM_CLASSES, test_rows),
         "client_acc.csv": _acc_lines("round,split,client", a, NUM_CLIENTS, test_rows),
         "env.json": json.dumps({"device": "mps", "gpu": None, "torch": "2.15.0", "commit": "abc", "dirty": False}),
@@ -187,8 +188,8 @@ def test_summary_accepts_accuracy_bounds(tmp_path, value):
 
 
 @pytest.mark.parametrize("kwargs, problem", [
-    ({"rounds_logged": 39}, "rounds.csv가 39줄 (설정 40라운드)"),                       # 중간에 끊긴 로그
-    ({"clients_logged": 399}, "clients.csv가 399줄 (설정 40라운드 × 클라이언트 10명)"),
+    ({"rounds_logged": 39}, "rounds.csv: 빠진 행 1개 (예: 40라운드)"),                    # 중간에 끊긴 로그
+    ({"clients_logged": 399}, "clients.csv: 빠진 행 1개 (예: 40라운드 client 9)"),
     ({"skip": ("class_acc.csv",)}, "class_acc.csv: 빠진 행 410개 (예: 1라운드 val class 0)"),
     ({"acc_rounds": 1}, "class_acc.csv: 빠진 행 400개 (예: 2라운드 val class 0)"),     # 평가 로그만 중간에 잘림
     ({"test_rows": False}, "class_acc.csv: 빠진 행 10개 (예: 40라운드 test class 0)"),
@@ -363,3 +364,60 @@ def test_eval_log_with_swapped_round_is_incomplete(tmp_path, name, id_key):
 
     assert status == "incomplete"
     assert problems == [f"{name}: 빠진 행 10개 (예: 40라운드 val {id_key} 0), 중복 행 10개 (예: 39라운드 val {id_key} 0)"]
+
+
+
+@pytest.mark.parametrize("name, old, new", [
+    ("rounds.csv", "40\n", "39\n"),             # 40라운드 줄이 39라운드 줄로 바뀜 (줄 수는 같음)
+    ("clients.csv", "40,", "39,"),
+])
+def test_round_and_client_logs_with_swapped_round_are_incomplete(tmp_path, name, old, new):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+    path = tmp_path / run.name / name
+    path.write_text("".join(new + line[len(old):] if line.startswith(old) else line
+                            for line in path.read_text(encoding="utf-8").splitlines(keepends=True)), encoding="utf-8")
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and problems[0].startswith(f"{name}: 빠진 행") and "중복 행" in problems[0]
+
+
+def test_undecodable_log_is_incomplete_not_crash(tmp_path):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+    (tmp_path / run.name / "class_acc.csv").write_bytes(b"round,split,class\n\xff\xfe\n")
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and problems[0].startswith("class_acc.csv를 읽을 수 없음")
+
+
+CURRENT = {"device": "mps", "gpu": None, "torch": "2.15.0", "commit": "abc", "dirty": False}
+
+
+@pytest.mark.parametrize("change", [{"device": "cuda", "gpu": "Tesla T4"}, {"torch": "2.16.0"}])
+def test_result_from_other_machine_is_stale_on_resume(tmp_path, change):
+    # 같은 묶음 안에서 기기·GPU·torch 버전이 다른 결과가 섞이지 않게 이어서 실행하기 전에 멈춘다
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+
+    status, problems = run_status(tmp_path / run.name, expected, current_env={**CURRENT, **change})
+
+    assert status == "stale" and problems[0].startswith("실행 환경이 다름")
+
+
+def test_result_from_other_commit_is_done_with_warning(tmp_path):
+    # 문서만 고친 커밋으로도 재개가 막히지 않게, 커밋 차이는 경고만 한다
+    from run_matrix import commit_changed
+
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+    current = {**CURRENT, "commit": "def"}
+
+    assert run_status(tmp_path / run.name, expected, current_env=current) == ("done", [])
+    assert commit_changed(tmp_path / run.name, current)
