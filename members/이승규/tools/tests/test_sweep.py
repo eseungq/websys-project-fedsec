@@ -137,6 +137,16 @@ def test_expected_config_rejects_fractional_integer(value):
         expected_config({**BASE, "train": {**BASE["train"], "local_ep": value}}, {})
 
 
+
+@pytest.mark.parametrize("value", [9007199254740993, "9007199254740993"])
+def test_expected_config_keeps_large_seed_exact(value):
+    assert expected_config({**BASE, "seed": value}, {})["seed"] == 9007199254740993
+
+
+def test_expected_config_rejects_bool_integer():
+    with pytest.raises(ValueError, match="정수여야 합니다"):
+        expected_config({**BASE, "train": {**BASE["train"], "local_ep": True}}, {})
+
 def test_expected_config_rejects_missing_required_key():
     train = {k: v for k, v in BASE["train"].items() if k != "weight_decay"}
 

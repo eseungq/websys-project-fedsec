@@ -49,6 +49,14 @@ def test_load_config_accepts_whole_number_float_and_string(tmp_path):
     assert isinstance(cfg.train.local_ep, int)
 
 
+
+@pytest.mark.parametrize("value", [9007199254740993, "9007199254740993"])
+def test_load_config_keeps_large_seed_exact(tmp_path, value):
+    # float를 거치면 2**53 + 1이 2**53으로 바뀌던 문제
+    path = write_base(tmp_path, BASE_TEXT.replace("seed: 0", f"seed: {value!r}"))
+
+    assert load_config(path).seed == 9007199254740993
+
 @pytest.mark.parametrize("text", [
     BASE_TEXT + "rouns: 50\n",                              # 오타 키: 예전에는 조용히 무시되어 40라운드로 실행됨
     BASE_TEXT.replace("eval_bs: 1000\n", ""),               # 빠진 항목
