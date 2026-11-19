@@ -57,6 +57,49 @@ def whole_number(value) -> int:
 TRAIN_TYPES = {"lr": float, "momentum": float, "weight_decay": float, "local_ep": whole_number, "local_bs": whole_number}
 
 
+AGGREGATORS = ("fedavg", "clip_fedavg", "median")
+
+
+@dataclass(frozen=True)
+class AttackDefenseConfig:
+    """공격·방어 설정 (configs/attack_defense.yaml). 학습 설정(base.yaml)과 따로 둔다."""
+    attack: bool               # 악성 클라이언트의 공모 공격 켜기
+    attack_scale: float        # 악성 정상 업데이트 평균에 곱하는 값 (명세 -5)
+    aggregator: str            # fedavg | clip_fedavg | median
+    clip_norm: float           # clip_fedavg(와 clip_before_median)의 노름 상한
+    clip_before_median: bool   # 중앙값 전에 클리핑할지
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def with_overrides(self, **overrides) -> "AttackDefenseConfig":
+        """None이 아닌 값만 바꾼 새 설정 (명령줄 덮어쓰기)."""
+        return _validated_attack_defense(replace(self, **{k: v for k, v in overrides.items() if v is not None}))
+
+
+def _validated_attack_defense(cfg: AttackDefenseConfig) -> AttackDefenseConfig:
+    if cfg.aggregator not in AGGREGATORS:
+        raise ValueError(f"설정 오류: aggregator는 {', '.join(AGGREGATORS)} 중 하나여야 합니다: {cfg.aggregator}")
+    if not cfg.clip_norm > 0:
+        raise ValueError(f"설정 오류: clip_norm은 양수여야 합니다: {cfg.clip_norm}")
+    if not isinstance(cfg.attack, bool) or not isinstance(cfg.clip_before_median, bool):
+        raise ValueError("설정 오류: attack과 clip_before_median은 true/false여야 합니다.")
+    return cfg
+
+
+def load_attack_defense(path: Path) -> AttackDefenseConfig:
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        cfg = AttackDefenseConfig(
+            attack=raw["attack"]["enabled"], attack_scale=float(raw["attack"]["scale"]),
+            aggregator=str(raw["defense"]["aggregator"]), clip_norm=float(raw["defense"]["clip_norm"]),
+            clip_before_median=raw["defense"]["clip_before_median"],
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"공격·방어 설정 파일 {path}의 항목이 잘못되었습니다: {error}") from error
+    return _validated_attack_defense(cfg)
+
+
 def load_config(path: Path) -> ExperimentConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     train = dict(raw["train"])

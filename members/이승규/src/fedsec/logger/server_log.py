@@ -1,0 +1,26 @@
+"""서버 기록 파일: server_rounds.csv(라운드별 집계 요약), exclusions.csv(제외된 제출과 사유)."""
+
+import json
+from pathlib import Path
+
+from fedsec.logger.run_log import _append_rows
+
+
+def _cell(value):
+    """목록·사전은 CSV 한 칸에 들어가도록 JSON 문자열로 바꾼다."""
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return value
+
+
+class ServerLog:
+    def __init__(self, out_dir: Path):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        self._rounds_path = out_dir / "server_rounds.csv"
+        self._exclusions_path = out_dir / "exclusions.csv"
+
+    def log_round(self, record: dict) -> None:
+        _append_rows(self._rounds_path, [{k: _cell(v) for k, v in record.items()}])
+
+    def log_exclusion(self, record: dict) -> None:
+        _append_rows(self._exclusions_path, [{k: _cell(v) for k, v in record.items()}])
