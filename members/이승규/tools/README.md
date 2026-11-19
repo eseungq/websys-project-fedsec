@@ -33,7 +33,7 @@ runs:
 python tools/summarize.py experiments/lr*_r50 experiments/sweep/m0.5_*
 python tools/summarize.py experiments/sweep/[!_]* --epochs 50 --md all.md --csv all.csv   # _tables 폴더는 빼고
 ```
-행은 `last5_val` 높은 순. Markdown은 정확도를 %로, CSV는 원래 값(0~1)으로 씁니다. 인자에는 실행 결과 폴더만 넘깁니다(`summary.json` 없는 폴더는 오류).
+행은 `last5_val` 높은 순. Markdown은 정확도를 %로, CSV는 원래 값(0\~1)으로 씁니다. 인자에는 실행 결과 폴더만 넘깁니다(`summary.json` 없는 폴더는 오류).
 
 테스트 정확도는 설정 선택에 쓰지 않으므로 표에 넣지 않습니다. (`experiments/sweep/_tables/`의 표는 이 변경 전에 만들어 `final_test` 열이 남아 있습니다.)
 

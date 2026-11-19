@@ -38,7 +38,7 @@ python scripts/run_experiment.py --name final --evaluate-test         # 설정 �
 ## 결과 요약
 [`docs/001-baseline-setup.md`](docs/001-baseline-setup.md)
 - 학습률 비교(0.005 / 0.01 / 0.02, 50라운드) → lr 0.01, 40라운드 제안
-- 시드 반복(시드 0~2, Kaggle T4 포함) → 40라운드 검증 75.8~76.2%
+- 시드 반복(시드 0\~2, Kaggle T4 포함) → 40라운드 검증 75.8\~76.2%
 - 업데이트 노름 분포 (클리핑 상한 참고)
 
 ## 폴더 구성
