@@ -16,8 +16,13 @@ from fedsec.client import program
 from fedsec.client.program import checkpoint_path, client_plan, run_clients, should_save
 from fedsec.data.cifar10 import TensorData
 from fedsec.experiment.evaluate import Evaluation, evaluate, evaluate_detailed
-from fedsec.experiment.metrics import (class_accuracy, class_rows, client_acc_rows, distribution_weighted_accuracy,
-                                       label_distribution)
+from fedsec.experiment.metrics import (
+    class_accuracy,
+    class_rows,
+    client_acc_rows,
+    distribution_weighted_accuracy,
+    label_distribution,
+)
 from fedsec.server.app import create_app
 from fedsec.server.scenario import build_defense, scenario_policy
 from fedsec.server.state import ServerState, initial_global_state

@@ -24,8 +24,7 @@ from fedsec.data.split import load_split
 from fedsec.environments.acceptance import RoundDecision, judge_round
 from fedsec.environments.config import EnvConfig
 from fedsec.environments.schedule import delayed_clients, malicious_clients
-from fedsec.environments.virtual_time import (VirtualTiming, check_delay_setting, round_elapsed,
-                                              virtual_finish_times)
+from fedsec.environments.virtual_time import VirtualTiming, check_delay_setting, round_elapsed, virtual_finish_times
 from fedsec.experiment.config import AttackDefenseConfig, ExperimentConfig
 from fedsec.experiment.evaluate import Evaluation, evaluate_detailed
 from fedsec.experiment.metrics import class_rows, client_acc_rows, label_distribution

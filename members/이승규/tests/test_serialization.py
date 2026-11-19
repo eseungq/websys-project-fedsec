@@ -23,9 +23,9 @@ def test_round_trip_is_bit_exact():
     restored = decode_state(encode_state(state))
 
     assert restored.keys() == state.keys()
-    for key in state:
-        assert restored[key].dtype == state[key].dtype
-        assert torch.equal(restored[key], state[key])
+    for key, value in state.items():
+        assert restored[key].dtype == value.dtype
+        assert torch.equal(restored[key], value)
     assert torch.signbit(restored["b"][1])  # -0.0의 부호까지 그대로
 
 

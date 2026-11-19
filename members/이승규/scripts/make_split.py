@@ -10,8 +10,7 @@ from pathlib import Path
 
 from torchvision.datasets import CIFAR10
 
-from fedsec.data.split import (class_counts, load_split, make_iid_split, make_label_skew_split, save_split,
-                               skew_score)
+from fedsec.data.split import class_counts, load_split, make_iid_split, make_label_skew_split, save_split, skew_score
 
 # IID 분할은 팀 공용이라 레포 루트의 configs/splits/에 저장한다.
 REPO_ROOT = Path(__file__).resolve().parents[3]

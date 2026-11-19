@@ -2,7 +2,6 @@ import pytest
 
 from fedsec.experiment.config import load_config
 
-
 BASE_TEXT = """
 seed: 0
 split: configs/splits/iid_seed0.json

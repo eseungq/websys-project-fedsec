@@ -189,7 +189,7 @@ def run_sweep(runs: list[dict], root: Path, python: str, dry_run: bool = False) 
         print(f"{label} 실행: {' '.join(cmd[1:])}", flush=True)
         if dry_run:
             continue
-        result = subprocess.run(cmd, cwd=root)
+        result = subprocess.run(cmd, check=False, cwd=root)
         if result.returncode != 0 or not (out_dir / "summary.json").exists():
             print(f"{label} 실패 (종료 코드 {result.returncode}). 여기서 멈춥니다.", flush=True)
             return 1

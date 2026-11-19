@@ -21,6 +21,7 @@ from pathlib import Path
 import torch
 import yaml
 from PIL import Image, ImageDraw
+from run_clients import new_out_dir
 from torchvision.datasets import CIFAR10
 from torchvision.utils import save_image
 
@@ -29,7 +30,6 @@ from fedsec.data.split import load_split
 from fedsec.experiment.config import whole_number
 from fedsec.experiment.runtime import environment_info
 from fedsec.models.lenet import build_dlg_lenet
-from run_clients import new_out_dir
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = MEMBER_ROOT.parents[1]

@@ -13,13 +13,13 @@ import argparse
 from dataclasses import replace
 from pathlib import Path
 
+from run_clients import DEFAULT_NUM_CLIENTS, add_scenario_args, load_scenario
+
 from fedsec.experiment.config import load_config
 from fedsec.logger.server_log import ServerLog
 from fedsec.server.app import DEFAULT_PORT, HOST, create_app
 from fedsec.server.scenario import build_defense, scenario_policy
 from fedsec.server.state import ServerState, initial_global_state
-
-from run_clients import DEFAULT_NUM_CLIENTS, add_scenario_args, load_scenario
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 

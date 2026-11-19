@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-
 from run_clients import EXPERIMENTS_DIR, add_experiment_args, add_scenario_args, client_setup, inside
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
@@ -231,7 +230,7 @@ def main() -> None:
     try:
         for i, run in enumerate(todo, 1):
             print(f"\n=== {i}/{len(todo)} {run.name} ===", flush=True)
-            if subprocess.run(run.command(args.prefix, args.rounds), cwd=MEMBER_ROOT).returncode != 0:
+            if subprocess.run(run.command(args.prefix, args.rounds), check=False, cwd=MEMBER_ROOT).returncode != 0:
                 sys.exit(f"실행 실패: {run.name} (끊긴 폴더를 정리한 뒤 같은 명령으로 다시 실행하면 이 실행부터 이어서 함)")
     finally:
         final = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds))[0] for run in runs}

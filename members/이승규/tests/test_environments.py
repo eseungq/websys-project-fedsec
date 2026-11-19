@@ -7,8 +7,13 @@ import pytest
 from fedsec.environments.acceptance import LATE, NOT_APPLICABLE, TOO_FEW_ACCEPTED, judge_round
 from fedsec.environments.config import load_env_config
 from fedsec.environments.schedule import delayed_clients, malicious_clients, round_participants
-from fedsec.environments.virtual_time import (VirtualTiming, check_delay_setting, late_clients, round_elapsed,
-                                              virtual_finish_times)
+from fedsec.environments.virtual_time import (
+    VirtualTiming,
+    check_delay_setting,
+    late_clients,
+    round_elapsed,
+    virtual_finish_times,
+)
 
 ENV_DIR = Path(__file__).resolve().parents[1] / "configs" / "env"
 ENV_NAMES = ("baseline", "delay", "partial", "label_skew")

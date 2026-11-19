@@ -10,9 +10,10 @@ import argparse
 import json
 from pathlib import Path
 
+from run_clients import new_out_dir
+
 from fedsec.experiment.config import load_config
 from fedsec.experiment.runner import run_fedavg
-from run_clients import new_out_dir
 
 # 기본 설정·결과는 개인 폴더(members/이승규/), 공용 분할 파일·데이터는 레포 루트 기준
 MEMBER_ROOT = Path(__file__).resolve().parents[1]

@@ -155,7 +155,7 @@ def test_invalid_submission_is_excluded_with_reason(body, reason, status):
 
 
 def test_non_json_body_is_bad_json():
-    state, client = _server()
+    _state, client = _server()
 
     reply = client.post("/update", data="not json", content_type="text/plain")
 
@@ -173,7 +173,7 @@ def test_oversized_request_is_rejected_before_parsing():
 
 
 def test_oversized_update_inside_request_limit_is_too_large():
-    state, client = _server(max_update_bytes=1000)
+    _state, client = _server(max_update_bytes=1000)
 
     reply = client.post("/update", json=_payload(0, {"w": torch.zeros(400), "b": torch.zeros(1)}))
 
@@ -208,7 +208,7 @@ def test_injected_aggregator_is_used():
 
 
 def test_participants_policy_limits_who_can_submit():
-    state, client = _server(policy=ServerPolicy(participants=lambda rnd: [3, 1]))
+    _state, client = _server(policy=ServerPolicy(participants=lambda rnd: [3, 1]))
 
     snapshot = client.get("/model").get_json()["data"]
     reply = client.post("/update", json=_payload(0))
@@ -298,7 +298,7 @@ def test_sparse_update_is_bad_shape_not_server_error():
 
 def test_update_whose_norm_overflows_float32_is_rejected():
     # 원소는 유한(1e20)하지만 제곱합이 float32 최대(약 3.4e38)를 넘어 노름이 inf → 집계·클리핑이 실패하던 값
-    state, client = _server()
+    _state, client = _server()
 
     reply = client.post("/update", json=_payload(0, _delta(1e20, 1e20, 0.0)))
 

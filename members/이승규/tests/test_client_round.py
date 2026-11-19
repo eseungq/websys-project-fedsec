@@ -13,8 +13,7 @@ import torch
 from fedsec.aggregation.fedavg import apply_update, weighted_average
 from fedsec.aggregation.norms import update_norm
 from fedsec.client.local_train import TrainConfig, local_update
-from fedsec.client.program import (check_decision, check_reply, check_server, client_plan, fetch_snapshot,
-                                   run_round)
+from fedsec.client.program import check_decision, check_reply, check_server, client_plan, fetch_snapshot, run_round
 from fedsec.data.cifar10 import TensorData
 from fedsec.environments.acceptance import judge_round
 from fedsec.environments.config import load_env_config
@@ -91,7 +90,7 @@ def _round(env, attack_defense):
 @pytest.mark.parametrize("env_name", ["baseline", "delay", "partial", "label_skew"])
 @pytest.mark.parametrize("aggregator", ["fedavg", "clip_fedavg", "median"])
 def test_every_env_and_aggregator_fills_log_columns(env_name, aggregator):
-    row, rows, _, plan, _ = _round(_env(env_name), AD.with_overrides(attack=True, aggregator=aggregator))
+    row, rows, _, _plan, _ = _round(_env(env_name), AD.with_overrides(attack=True, aggregator=aggregator))
 
     assert all(row[key] not in ("", None) for key in ROUND_KEYS if key not in ("skip_reason",))
     assert len(rows) == NUM_CLIENTS and all(tuple(r) == CLIENT_KEYS for r in rows)
@@ -324,7 +323,7 @@ def live_server():
 def test_server_api_round_trip_over_http(live_server):
     from fedsec.server.serialization import encode_state
 
-    state, api = live_server
+    _state, api = live_server
     assert api.status()["round"] == 1
     body = {"client_id": 0, "round": 1, "model_version": 0, "num_samples": 10,
             "delta_weights": encode_state({"w": torch.ones(2)})}

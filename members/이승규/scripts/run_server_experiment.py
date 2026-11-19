@@ -15,12 +15,18 @@ import time
 from pathlib import Path
 
 import requests
+from run_clients import (
+    MEMBER_ROOT,
+    REPO_ROOT,
+    add_experiment_args,
+    add_scenario_args,
+    client_setup,
+    new_out_dir,
+    server_scenario_args,
+)
 
 from fedsec.client.program import run_clients
 from fedsec.server.app import HOST
-
-from run_clients import (MEMBER_ROOT, REPO_ROOT, add_experiment_args, add_scenario_args, client_setup, new_out_dir,
-                         server_scenario_args)
 
 SERVE_SCRIPT = Path(__file__).resolve().parent / "serve.py"
 READY_TIMEOUT_SEC = 60

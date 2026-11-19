@@ -9,10 +9,10 @@ import pytest
 
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMBER_ROOT / "scripts"))
-import yaml  # noqa: E402
-from run_matrix import Run, expected_config, index_rows, plan_runs, run_status  # noqa: E402
+import yaml
+from run_matrix import Run, expected_config, index_rows, plan_runs, run_status
 
-from fedsec.experiment.config import AGGREGATORS  # noqa: E402
+from fedsec.experiment.config import AGGREGATORS
 
 ENVS = ["baseline", "delay", "partial", "label_skew"]
 

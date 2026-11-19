@@ -6,7 +6,6 @@ from fedsec.aggregation.norms import update_norm
 from fedsec.defenses.clipping import clip_scale, clip_update, clipped_fedavg
 from fedsec.defenses.median import coordinate_median
 
-
 # --- 노름 클리핑 ---
 
 def test_update_within_limit_is_unchanged():
