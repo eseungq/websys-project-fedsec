@@ -258,7 +258,12 @@ GitHub 화면에서:
 3. 오른쪽 **Reviewers**에서 리뷰어 1명 이상 지정
 4. 승인을 받으면 **Merge pull request**(Create a merge commit) → **Delete branch**
 
-머지 뒤에는 각자 `git switch main && git pull`로 최신 상태를 받습니다.
+머지 뒤에는 각자 최신 `main`을 받고, 다 쓴 로컬 브랜치를 지웁니다. GitHub의 **Delete branch**는 GitHub 쪽 브랜치만 지우므로, 로컬 브랜치가 남아 있으면 다음에 같은 이름으로 `git switch -c`할 때 `already exists` 오류가 납니다.
+
+```bash
+git switch main && git pull            # 머지된 main 받기
+git branch -d member/<이름>            # 다 쓴 로컬 브랜치 삭제
+```
 
 **PR 규칙**
 
@@ -273,7 +278,7 @@ GitHub 화면에서:
 | 고칠 때 | 같은 브랜치에 커밋을 더해 push하면 PR이 자동으로 갱신됩니다. PR을 새로 만들지 않습니다 |
 | 머지 | 승인 후 **작성자가** 머지. 방식은 **Create a merge commit** (목적별 커밋 기록 유지, Squash 안 함) |
 | 머지 전 | `main`이 바뀌어 충돌이 나면 4번 절차로 해결 후 push |
-| 머지 후 | 브랜치 삭제. 다음 작업은 최신 `main`에서 브랜치를 다시 만듭니다 |
+| 머지 후 | GitHub 브랜치와 로컬 브랜치 모두 삭제(위 명령). 다음 작업은 최신 `main`에서 같은 이름(`member/<이름>`)으로 다시 만듭니다 |
 
 **올리기 전 확인** (템플릿의 체크리스트와 같습니다)
 - 자기 폴더(`members/<이름>/`) 또는 PR 목적에 맞는 파일만 바뀜
@@ -285,7 +290,7 @@ GitHub 화면에서:
 ### 4. 충돌이 났을 때
 
 ```bash
-git pull origin main                   # main의 변경을 내 브랜치로 받기
+git pull --no-rebase origin main       # main의 변경을 내 브랜치로 합치기 (--no-rebase: 병합 방식 고정)
 # 충돌 파일에서 <<<<<<< ======= >>>>>>> 표시를 찾아 남길 내용으로 고치고 표시 줄 삭제
 git add <고친 파일>
 git commit
