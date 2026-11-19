@@ -229,21 +229,28 @@ def test_norm_columns_match_update_norm_definition():
     assert rows[0]["update_norm"] == round(update_norm(first.update), 4)
 
 
-@pytest.mark.parametrize("change", [{"min_accepted": 8}, {"config_per_round": 5}])
-def test_check_server_rejects_other_round_policy(change):
+def _status(env, plan) -> dict:
+    """check_server가 받는 서버 /status (처음 상태, 클라이언트 설정과 같음)."""
+    return {"round": 1, "model_version": 0, "num_clients": NUM_CLIENTS, "min_accepted": env.min_accepted,
+            "config": {"seed": SEED, "model": CFG.model, "env": env.name, "per_round": env.per_round,
+                       "deadline": env.timing.deadline, **plan.defense}}
+
+
+@pytest.mark.parametrize("top, config", [
+    ({"min_accepted": 8}, {}), ({"num_clients": 9}, {}), ({"round": 2}, {}), ({"model_version": 1}, {}),
+    ({}, {"seed": 1}), ({}, {"model": "other"}), ({}, {"env": "delay"}), ({}, {"per_round": 5}),
+    ({}, {"deadline": 5.0}), ({}, {"aggregator": "median"}), ({}, {"clip_norm": 1.0}),
+    ({}, {"clip_before_median": True}),
+])
+def test_check_server_rejects_any_mismatch(top, config):
     env = _env("baseline")
     plan = client_plan("test", env, AD, SEED, NUM_CLIENTS)
-    defense = {key: plan.defense[key] for key in plan.defense}
-    status = {"round": 1, "model_version": 0, "num_clients": NUM_CLIENTS, "min_accepted": env.min_accepted,
-              "config": {"seed": SEED, "model": CFG.model, "env": env.name, "per_round": env.per_round, **defense}}
+    status = _status(env, plan)
     check_server(status, CFG, NUM_CLIENTS, plan)  # 같으면 통과
-    if "min_accepted" in change:
-        status = {**status, "min_accepted": change["min_accepted"]}
-    else:
-        status = {**status, "config": {**status["config"], "per_round": change["config_per_round"]}}
+    changed = {**status, **top, "config": {**status["config"], **config}}
 
     with pytest.raises(RuntimeError):
-        check_server(status, CFG, NUM_CLIENTS, plan)
+        check_server(changed, CFG, NUM_CLIENTS, plan)
 
 
 @pytest.mark.parametrize("reply", [

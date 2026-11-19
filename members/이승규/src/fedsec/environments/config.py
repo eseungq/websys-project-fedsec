@@ -23,10 +23,17 @@ class EnvConfig:
     min_accepted: int
 
 
+# 설정 파일에 있어야 하는 항목. 오타(min_acepted 등)나 빠진 항목이 기본값으로 조용히 바뀌지 않게 모두 요구한다
+ENV_KEYS = frozenset({"name", "split", "per_round", "malicious", "delayed", "virtual_time", "min_accepted"})
+ROLE_KEYS = {"malicious": frozenset({"count", "ids"}), "delayed": frozenset({"count", "ids", "avoid_malicious"})}
+
+
 def _role(raw: dict, key: str) -> tuple[int, tuple[int, ...] | None]:
     """{count, ids} 항목. ids를 주면 count는 그 길이와 같아야 한다."""
-    role = raw.get(key) or {}
-    count = whole_number(role.get("count", 0))
+    role = raw[key]
+    if not isinstance(role, dict) or "count" not in role or set(role) - ROLE_KEYS[key]:
+        raise ValueError(f"{key}에는 count가 있어야 하고 {sorted(ROLE_KEYS[key])} 외의 항목은 쓸 수 없습니다: {role!r}")
+    count = whole_number(role["count"])
     ids = role.get("ids")
     if ids is None:
         return count, None
@@ -38,10 +45,13 @@ def _role(raw: dict, key: str) -> tuple[int, tuple[int, ...] | None]:
 
 def load_env_config(path: Path) -> EnvConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or set(raw) != ENV_KEYS:
+        found = set(raw) if isinstance(raw, dict) else set()
+        raise ValueError(f"환경 설정 파일 {path}: 빠진 항목 {sorted(ENV_KEYS - found)}, 모르는 항목 {sorted(found - ENV_KEYS)}")
     try:
         num_malicious, malicious_ids = _role(raw, "malicious")
         num_delayed, delayed_ids = _role(raw, "delayed")
-        avoid_malicious = (raw.get("delayed") or {}).get("avoid_malicious", True)
+        avoid_malicious = raw["delayed"].get("avoid_malicious", True)
         if not isinstance(avoid_malicious, bool):
             raise ValueError(f"delayed.avoid_malicious는 true/false여야 합니다: {avoid_malicious!r}")
         timing = raw["virtual_time"]
@@ -55,12 +65,14 @@ def load_env_config(path: Path) -> EnvConfig:
                 base_time=float(timing["base_time"]), base_samples=whole_number(timing["base_samples"]),
                 delay=float(timing["delay"]), deadline=float(timing["deadline"]),
             ),
-            min_accepted=whole_number(raw.get("min_accepted", 3)),
+            min_accepted=whole_number(raw["min_accepted"]),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError(f"환경 설정 파일 {path}의 항목이 잘못되었습니다: {error}") from error
     if cfg.per_round is not None and cfg.per_round <= 0:
         raise ValueError(f"환경 설정 오류: per_round는 1 이상이어야 합니다 ({path})")
-    if cfg.num_malicious < 0 or cfg.num_delayed < 0 or cfg.min_accepted < 0:
-        raise ValueError(f"환경 설정 오류: count와 min_accepted는 0 이상이어야 합니다 ({path})")
+    if cfg.num_malicious < 0 or cfg.num_delayed < 0:
+        raise ValueError(f"환경 설정 오류: count는 0 이상이어야 합니다 ({path})")
+    if cfg.min_accepted < 1:
+        raise ValueError(f"환경 설정 오류: min_accepted는 1 이상이어야 합니다 ({path})")
     return cfg

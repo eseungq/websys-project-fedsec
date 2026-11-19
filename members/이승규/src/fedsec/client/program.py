@@ -24,7 +24,8 @@ from fedsec.data.split import load_split
 from fedsec.environments.acceptance import RoundDecision, judge_round
 from fedsec.environments.config import EnvConfig
 from fedsec.environments.schedule import delayed_clients, malicious_clients
-from fedsec.environments.virtual_time import VirtualTiming, round_elapsed, virtual_finish_times
+from fedsec.environments.virtual_time import (VirtualTiming, check_delay_setting, round_elapsed,
+                                              virtual_finish_times)
 from fedsec.experiment.config import AttackDefenseConfig, ExperimentConfig
 from fedsec.experiment.evaluate import Evaluation, evaluate_detailed
 from fedsec.experiment.metrics import class_rows, client_acc_rows, label_distribution
@@ -98,11 +99,29 @@ def client_plan(experiment_id: str, env: EnvConfig, attack_defense: AttackDefens
     malicious = malicious_clients(seed, num_clients, env.num_malicious, env.malicious_ids)
     exclude = malicious if env.delayed_avoid_malicious else ()
     delayed = delayed_clients(seed, num_clients, env.num_delayed, env.delayed_ids, exclude=exclude)
+    check_plan(env, attack_defense.attack, malicious, delayed, num_clients)
     ad = attack_defense.to_dict()
     return ClientPlan(experiment_id=experiment_id, env_name=env.name, malicious=malicious, delayed=delayed,
                       timing=env.timing, per_round=env.per_round, min_accepted=env.min_accepted,
                       attack=attack_defense.attack, attack_scale=attack_defense.attack_scale,
                       defense={key: ad[key] for key in DEFENSE_KEYS})
+
+
+def check_plan(env: EnvConfig, attack: bool, malicious: tuple[int, ...], delayed: tuple[int, ...],
+               num_clients: int) -> None:
+    """설정 조합이 실험 이름과 다른 실험을 만들지 않는지 확인한다 (예: 악성 0명인 공격 실험)."""
+    per_round = env.per_round or num_clients
+    checks = [
+        (not attack or len(malicious) > 0, "공격을 켰는데 악성 클라이언트가 없습니다."),
+        (not env.delayed_avoid_malicious or not set(delayed) & set(malicious),
+         f"지연 {list(delayed)}와 악성 {list(malicious)}이 겹칩니다 (avoid_malicious: true). 직접 지정한 ids를 확인하세요."),
+        (per_round <= num_clients, f"per_round {per_round}가 클라이언트 수 {num_clients}보다 큽니다."),
+        (env.min_accepted <= per_round,
+         f"min_accepted {env.min_accepted}가 라운드 참여자 수 {per_round}보다 커서 모델이 한 번도 갱신되지 않습니다."),
+    ]
+    problems = [message for ok, message in checks if not ok]
+    if problems:
+        raise ValueError(f"{env.name} 환경 설정 오류: " + " ".join(problems))
 
 
 @dataclass(frozen=True)
@@ -149,6 +168,7 @@ def check_server(status: dict, cfg: ExperimentConfig, num_clients: int, plan: Cl
     pairs = [("seed", server_cfg.get("seed"), cfg.seed), ("model", server_cfg.get("model"), cfg.model),
              ("num_clients", status["num_clients"], num_clients), ("env", server_cfg.get("env"), plan.env_name),
              ("per_round", server_cfg.get("per_round"), plan.per_round),
+             ("deadline", server_cfg.get("deadline"), plan.timing.deadline),
              ("min_accepted", status["min_accepted"], plan.min_accepted),
              *[(key, server_cfg.get(key), plan.defense[key]) for key in DEFENSE_KEYS]]
     mismatches = [f"{name}: 서버 {theirs}, 클라이언트 {ours}" for name, theirs, ours in pairs if theirs != ours]
@@ -327,6 +347,7 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
     set_seed(cfg.seed)
     device = pick_device()
     val, clients, test = _load_data(cfg, repo_root, device)
+    check_delay_setting({cid: len(data) for cid, data in enumerate(clients)}, plan.delayed, plan.timing)
     api = ServerApi(server_url)
     status = api.status()
     check_server(status, cfg, len(clients), plan)

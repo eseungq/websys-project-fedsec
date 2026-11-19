@@ -11,7 +11,6 @@ rounds: 40
 model: simple_cnn
 train: {optimizer: sgd, lr: 0.01, momentum: 0.9, weight_decay: 5e-4, local_ep: 1, local_bs: 32}
 eval_bs: 1000
-note: 기록되지 않는 키
 """
 
 
@@ -49,3 +48,15 @@ def test_load_config_accepts_whole_number_float_and_string(tmp_path):
 
     assert (cfg.train.local_ep, cfg.train.local_bs) == (2, 64)
     assert isinstance(cfg.train.local_ep, int)
+
+
+@pytest.mark.parametrize("text", [
+    BASE_TEXT + "rouns: 50\n",                              # 오타 키: 예전에는 조용히 무시되어 40라운드로 실행됨
+    BASE_TEXT.replace("eval_bs: 1000\n", ""),               # 빠진 항목
+    "",                                                     # 빈 파일
+    BASE_TEXT.replace("lr: 0.01", "lr: .inf"),              # 무한대
+    BASE_TEXT.replace("local_ep: 1", "local_ep: true"),     # true는 정수가 아님
+])
+def test_load_config_rejects_unknown_missing_or_bad_values(tmp_path, text):
+    with pytest.raises(ValueError):
+        load_config(write_base(tmp_path, text))

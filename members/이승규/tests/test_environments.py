@@ -232,3 +232,48 @@ def test_ids_count_mismatch_is_rejected(tmp_path):
 
     with pytest.raises(ValueError):
         load_env_config(path)
+
+
+# 설정 오타·빠진 항목·불가능한 조합이 다른 실험으로 조용히 바뀌지 않는지
+
+DELAY_TEXT = (ENV_DIR / "delay.yaml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("text", [
+    DELAY_TEXT.replace("min_accepted: 3", "min_acepted: 3"),                     # 오타 → 예전에는 기본값 3
+    DELAY_TEXT.replace("malicious:\n  count: 2\n  ids: null\n", ""),              # 악성 항목 빠짐 → 예전에는 0명
+    DELAY_TEXT.replace("min_accepted: 3", "min_accepted: 0"),
+    DELAY_TEXT.replace("deadline: 1.5", "deadline: .nan"),                       # NaN이면 모두 late
+    DELAY_TEXT.replace("delay: 2.0", "delay: .inf"),
+    DELAY_TEXT + "extra: 1\n",
+    "",
+])
+def test_bad_environment_file_is_rejected(tmp_path, text):
+    path = tmp_path / "bad.yaml"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_env_config(path)
+
+
+@pytest.mark.parametrize("env_changes, attack", [
+    ({"num_malicious": 0, "malicious_ids": None}, True),                         # 이름만 attack인 정상 실험
+    ({"malicious_ids": (0, 1), "delayed_ids": (0, 1, 2)}, False),               # avoid_malicious인데 겹침
+    ({"per_round": 2}, False),                                                   # min_accepted 3 > 참여 2명
+    ({"per_round": 11}, False),
+])
+def test_impossible_plan_is_rejected(env_changes, attack):
+    from fedsec.client.program import client_plan
+    from fedsec.experiment.config import load_attack_defense
+
+    env = replace(load_env_config(ENV_DIR / "delay.yaml"), **env_changes)
+    ad = load_attack_defense(ENV_DIR.parent / "attack_defense.yaml").with_overrides(attack=attack)
+
+    with pytest.raises(ValueError):
+        client_plan("x", env, ad, seed=0, num_clients=NUM_CLIENTS)
+
+
+def test_delay_values_that_make_no_one_late_are_rejected():
+    # delay 0.2면 지연 클라이언트도 1.2로 마감 1.5 안 → "지연" 환경이 사실상 기준 환경
+    with pytest.raises(ValueError):
+        check_delay_setting(SAMPLES, (0, 4, 9), replace(TIMING, delay=0.2))

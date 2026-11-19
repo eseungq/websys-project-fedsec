@@ -1,5 +1,6 @@
 """실험 설정 파일(YAML)을 읽고 값이 올바른지 확인한다."""
 
+import math
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -33,6 +34,7 @@ def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
     checks = [
         (cfg.rounds > 0, "rounds는 1 이상이어야 합니다."),
         (cfg.eval_bs > 0, "eval_bs는 1 이상이어야 합니다."),
+        (all(math.isfinite(v) for v in (t.lr, t.momentum, t.weight_decay)), "lr, momentum, weight_decay는 유한한 숫자여야 합니다."),
         (t.lr > 0, "lr은 양수여야 합니다."),
         (0 <= t.momentum < 1, "momentum은 0 이상 1 미만이어야 합니다."),
         (t.weight_decay >= 0, "weight_decay는 0 이상이어야 합니다."),
@@ -46,7 +48,9 @@ def _validated(cfg: ExperimentConfig) -> ExperimentConfig:
 
 
 def whole_number(value) -> int:
-    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (int()는 조용히 버림)."""
+    """정수 항목: 1, 1.0, "32"는 받고 1.9처럼 소수 부분이 있으면 거부한다 (int()는 조용히 버림). true/false도 거부."""
+    if isinstance(value, bool):
+        raise ValueError(f"정수여야 합니다: {value!r}")
     number = float(value)
     if not number.is_integer():
         raise ValueError(f"정수여야 합니다: {value!r}")
@@ -80,8 +84,10 @@ class AttackDefenseConfig:
 def _validated_attack_defense(cfg: AttackDefenseConfig) -> AttackDefenseConfig:
     if cfg.aggregator not in AGGREGATORS:
         raise ValueError(f"설정 오류: aggregator는 {', '.join(AGGREGATORS)} 중 하나여야 합니다: {cfg.aggregator}")
-    if not cfg.clip_norm > 0:
-        raise ValueError(f"설정 오류: clip_norm은 양수여야 합니다: {cfg.clip_norm}")
+    if not (math.isfinite(cfg.clip_norm) and cfg.clip_norm > 0):
+        raise ValueError(f"설정 오류: clip_norm은 유한한 양수여야 합니다: {cfg.clip_norm}")
+    if not (math.isfinite(cfg.attack_scale) and cfg.attack_scale != 0):
+        raise ValueError(f"설정 오류: attack.scale은 0이 아닌 유한한 숫자여야 합니다: {cfg.attack_scale}")
     if not isinstance(cfg.attack, bool) or not isinstance(cfg.clip_before_median, bool):
         raise ValueError("설정 오류: attack과 clip_before_median은 true/false여야 합니다.")
     return cfg
@@ -100,8 +106,15 @@ def load_attack_defense(path: Path) -> AttackDefenseConfig:
     return _validated_attack_defense(cfg)
 
 
+CONFIG_KEYS = frozenset({"seed", "split", "data_root", "rounds", "model", "train", "eval_bs"})
+
+
 def load_config(path: Path) -> ExperimentConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or set(raw) != CONFIG_KEYS or not isinstance(raw["train"], dict):
+        found = set(raw) if isinstance(raw, dict) else set()
+        raise ValueError(f"설정 파일 {path}: 빠진 항목 {sorted(CONFIG_KEYS - found)}, 모르는 항목 {sorted(found - CONFIG_KEYS)}"
+                         " (train은 항목 묶음이어야 함)")
     train = dict(raw["train"])
     optimizer = train.pop("optimizer", "sgd")
     if optimizer != "sgd":

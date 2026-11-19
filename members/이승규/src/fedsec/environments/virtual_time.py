@@ -4,6 +4,7 @@
 그래서 채택 여부는 표본 수와 설정 값만으로 정해지는 가상 완료 시각으로 판정한다.
 """
 
+import math
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
@@ -16,6 +17,8 @@ class VirtualTiming:
     deadline: float      # 이 시각보다 늦게 끝나면 제외 (사유 late)
 
     def __post_init__(self) -> None:
+        if not all(math.isfinite(v) for v in (self.base_time, self.delay, self.deadline)):
+            raise ValueError("base_time, delay, deadline은 유한한 숫자여야 합니다.")
         if self.base_time <= 0 or self.base_samples <= 0:
             raise ValueError("base_time과 base_samples는 양수여야 합니다.")
         if self.delay < 0 or self.deadline <= 0:
