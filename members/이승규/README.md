@@ -3,9 +3,14 @@
 11/24 대표 코드 선정 전까지 쓰는 개인 폴더입니다. 선정되면 레포 루트 `src/fedsec/` 등으로 머지됩니다.
 
 ## 구현 범위
-- 명세 1단계 일부: 정상 FedAvg, IID 분할, 클라이언트 전원 참여
-- 라운드 × 클라이언트별 업데이트 노름 기록 (클리핑 상한 정할 때 사용)
-- 없음: 서버(웹), 공격, 방어, DLG
+| 명세 단계 | 구현 |
+|---|---|
+| 1. 기본 학습·데이터 준비 | 정상 FedAvg, IID 분할, 학습 설정 탐색 |
+| 2. 연합학습 환경 | Flask 서버(`GET /status`, `GET /model`, `POST /update`, `POST /aggregate`)와 가상 클라이언트 실행 프로그램, 제출 검증·제외 사유 기록 |
+| 3. 공격과 방어 | 내부자 협력 공격(악성 2명, 정상 업데이트 평균 × (−5)), 노름 클리핑 후 FedAvg, 좌표별 중앙값 / DLG와 가우시안 노이즈 방어 |
+| 4. 운영 환경별 비교 | 기준·지연·부분 참여·레이블 편향 환경, 72회 일괄 실행 목록(`run_matrix.py`). **본 실험은 아직 안 돌림** |
+| 5. 로그 | 조작 전·후·방어 후 노름, 채택·제외 사유, 실제 채택 악성 비율, 가상·실제 시간 |
+| 6. 원인 분석 | 아직 없음 (재실행 스크립트 포함) |
 
 ## 실행 방법
 명령은 모두 이 폴더(`members/이승규/`)에서 실행합니다. 가상환경은 레포 루트의 `.venv/`를 씁니다.
@@ -74,12 +79,18 @@ python scripts/make_split.py --show-dist configs/splits/iid_seed0.json   # 분�
 - 실험 1회(40라운드) 로컬 MPS 약 2.5분, Kaggle T4 약 2.2분
 - 결과 폴더 [`experiments/`](experiments/), 비교표 [`experiments/sweep/_tables/`](experiments/sweep/_tables/)
 
+**[DLG 결과](docs/DLG-결과.md)** (11/19, 이미지 5장 × 노이즈 7단계)
+
+- 노이즈 제안: 작음 σ 1e-2(형체 남음, MSE 0.05\~0.08), 큼 σ 1e-1(형체 없음, 무작위 수준) (제안 단계, 팀 확인 전)
+- 노이즈로 레이블은 지켜지지 않음 (σ 1e-1에서도 5장 모두 복원)
+- 복원이 멈춘 사례 1건(dog, σ 1e-2)은 노이즈가 아니라 최적화 초반 폭주 → 6단계 원인 분석 사례 후보
+
 ## 폴더 구성
 | 경로 | 내용 |
 |---|---|
-| `src/fedsec/` | 실험 엔진 패키지 (데이터, 모델, 로컬 학습, 집계, 로그, 실행) |
-| `scripts/` | 실행 스크립트 (`run_experiment.py`, `make_split.py`) |
-| `tests/` | 집계·분할 수치 예제 테스트 |
-| `configs/` | 기준 설정 `base.yaml` |
+| `src/fedsec/` | 실험 엔진 패키지 (데이터, 모델, 로컬 학습, 집계, 공격, 방어, 환경, 서버, 로그, 실행) |
+| `scripts/` | 실행 스크립트 (서버 없이 `run_experiment.py`, 서버 경유 `run_server_experiment.py`, 일괄 `run_matrix.py`, `run_dlg.py`, `make_split.py`) |
+| `tests/` | 집계·공격·방어·환경·서버·DLG 수치 예제 테스트 |
+| `configs/` | 학습 설정 `base.yaml`, 공격·방어 `attack_defense.yaml`, 환경 `env/`, 레이블 편향 분할 `splits/`, DLG `dlg.yaml` |
 | `experiments/` | 실험 결과 (`models/`는 커밋 안 함) |
-| `docs/` | 학습 설정 결과 문서 (`학습설정-결과.md`) |
+| `docs/` | 결과 문서 (`학습설정-결과.md`, `DLG-결과.md`) |

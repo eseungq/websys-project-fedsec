@@ -5,10 +5,12 @@
 | 파일 | 상태 | 역할 |
 |---|---|---|
 | `make_split.py` | 있음 | 분할 파일 생성 (레포 루트 `configs/splits/iid_seed0.json`, 이미 커밋됨 → 다시 만들 필요 없음) |
-| `run_experiment.py` | 있음 (정상 FedAvg만) | 설정 하나로 실험 1회 실행 |
-| `run_matrix.py` | 예정 | 환경 4 × (정상, 공격) × 집계 3 × 시드 일괄 실행 |
+| `run_experiment.py` | 있음 | 서버 없이 정상 FedAvg 1회 실행 (학습 설정 탐색용) |
+| `serve.py`, `run_clients.py` | 있음 | Flask 서버, 가상 클라이언트 실행 프로그램을 따로 실행 |
+| `run_server_experiment.py` | 있음 | 서버를 띄우고 클라이언트를 실행한 뒤 서버 종료 (환경·공격·방어 선택) |
+| `run_matrix.py` | 있음 (본 실험은 아직 안 돌림) | 환경 4 × (정상, 공격) × 집계 3 × 시드 일괄 실행, `--dry-run` |
 | `replay_round.py` | 예정 | 저장된 상태에서 특정 라운드부터 조건 하나를 바꿔 재실행 |
-| `run_dlg.py` | 예정 | DLG 복원 실험 |
+| `run_dlg.py` | 있음 | DLG 복원 실험 (CPU) |
 | `make_figures.py` | 예정 | 평가표·비교 그래프 생성 |
 
 ## 하이퍼파라미터 비교 실행
