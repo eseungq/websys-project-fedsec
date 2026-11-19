@@ -48,8 +48,8 @@ NUM_CLIENTS = DEFAULT_NUM_CLIENTS
 RUN_ENV_KEYS = ("device", "gpu", "torch", "commit", "dirty")
 # 클래스별·클라이언트별 비교에 쓰는 로그. 비어 있으면 끝난 실행으로 치지 않음
 REQUIRED_LOGS = ("class_acc.csv", "client_acc.csv")
-SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "diverged_round", "rounds_not_updated", "total_virtual_time",
-                "total_sec")
+SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "diverged_round", "rounds_completed", "rounds_not_updated",
+                "total_virtual_time", "total_sec")
 # 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
 REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
 
@@ -166,6 +166,18 @@ def _count_rows(path: Path) -> int:
         return 0
 
 
+
+def diverged_problems(summary: dict, expected: dict) -> list[str]:
+    """발산한 실행이 믿을 만한지. 발산은 공격 실험의 결과로만 인정한다 (정상 실행의 발산은 설정 문제)."""
+    diverged, completed, rounds = summary["diverged_round"], summary.get("rounds_completed"), expected["rounds"]
+    if type(diverged) is not int or not 2 <= diverged <= rounds:
+        return [f"summary.json의 diverged_round가 2~{rounds} 사이 정수가 아님: {diverged!r}"]
+    if not expected["plan"]["attack"]:
+        return [f"정상 실행이 {diverged}라운드에 발산함 (공격 실험에서만 결과로 인정)"]
+    if completed != diverged - 1:
+        return [f"summary.json의 rounds_completed {completed!r}가 diverged_round - 1({diverged - 1})과 다름"]
+    return []
+
 def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     """("todo" | "incomplete" | "stale" | "done", 다른 설정 또는 빠진 결과 목록)."""
     if not out_dir.exists():
@@ -186,8 +198,10 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
     if mismatches:
         return "stale", mismatches
     diverged = summary.get("diverged_round")
-    if diverged is not None and (type(diverged) is not int or not 2 <= diverged <= expected["rounds"]):
-        return "incomplete", [f"summary.json의 diverged_round가 2~{expected['rounds']} 사이 정수가 아님: {diverged!r}"]
+    if diverged is not None:
+        problems = diverged_problems(summary, expected)
+        if problems:
+            return "incomplete", problems
     # 발산한 실행은 발산 전 라운드까지만 로그가 있다 (program.run_clients)
     problems = output_problems(out_dir, expected["rounds"] if diverged is None else diverged - 1)
     return ("incomplete", problems) if problems else ("done", [])
@@ -224,6 +238,13 @@ def write_index(prefix_dir: Path, rows: list[dict]) -> Path:
     return path
 
 
+
+def check_finished(prefix_dir: Path, run: Run, expected: dict) -> None:
+    """실행 프로세스가 0으로 끝나도 산출물이 덜 쓰였거나 설정이 다르면 다음 실행으로 넘어가지 않는다."""
+    status, problems = run_status(prefix_dir / run.name, expected)
+    if status != "done":
+        sys.exit(f"실행은 끝났지만 결과가 {status}입니다: {run.name}\n  " + "\n  ".join(problems))
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--prefix", default=DEFAULT_PREFIX, help="experiments/ 아래 묶음 폴더 이름")
@@ -244,7 +265,7 @@ def main() -> None:
     incomplete = [run.name + "".join(f"\n    {reason}" for reason in checked[run][1])
                   for run in runs if statuses[run] == "incomplete"]
     if incomplete:
-        sys.exit("끊긴 실행이 있습니다 (summary.json 없음, 결과 항목 빠짐 또는 잘못된 값). 지우거나 옮긴 뒤 다시 실행하세요:\n  "
+        sys.exit("끊긴 실행이 있습니다 (아래 사유: 빠진 산출물, 잘못된 값, 정상 실행의 발산 등). 지우거나 옮긴 뒤 다시 실행하세요:\n  "
                  + "\n  ".join(incomplete))
     stale = [f"{run.name}\n    " + "\n    ".join(checked[run][1]) for run in runs if statuses[run] == "stale"]
     if stale:
@@ -262,6 +283,7 @@ def main() -> None:
             print(f"\n=== {i}/{len(todo)} {run.name} ===", flush=True)
             if subprocess.run(run.command(args.prefix, args.rounds), check=False, cwd=MEMBER_ROOT).returncode != 0:
                 sys.exit(f"실행 실패: {run.name} (끊긴 폴더를 정리한 뒤 같은 명령으로 다시 실행하면 이 실행부터 이어서 함)")
+            check_finished(prefix_dir, run, expected_config(run, args.prefix, args.rounds))
     finally:
         final = {run: run_status(prefix_dir / run.name, expected_config(run, args.prefix, args.rounds))[0] for run in runs}
         print(f"요약: {write_index(prefix_dir, index_rows(prefix_dir, runs, final)).relative_to(MEMBER_ROOT)}")

@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 from fedsec.client import program
+from fedsec.client.local_train import TrainingDiverged
 from fedsec.client.program import checkpoint_path, client_plan, run_clients, should_save
 from fedsec.data.cifar10 import TensorData
 from fedsec.experiment.evaluate import Evaluation, evaluate, evaluate_detailed
@@ -134,8 +135,9 @@ def test_run_clients_rejects_negative_save_every(tmp_path):
         run_clients(CFG, tmp_path, repo_root=tmp_path, server_url="unused", plan=None, save_every=-1)
 
 
-def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None):
-    """run_clients를 Flask 테스트 클라이언트로 돌린다. diverge_at 라운드의 로컬 학습에서 발산(FloatingPointError)."""
+def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None, attack=True, nan_val_at=None):
+    """run_clients를 Flask 테스트 클라이언트로 돌린다. diverge_at 라운드의 로컬 학습에서 발산(TrainingDiverged),
+    nan_val_at 라운드 집계 뒤 검증 손실이 NaN (전역 모델이 깨진 경우)."""
     env = _env("baseline")
     cfg = replace(CFG, rounds=rounds)
     policy = scenario_policy(env, build_defense(AD), SEED, NUM_CLIENTS)
@@ -151,11 +153,21 @@ def _metrics_run(tmp_path, monkeypatch, rounds, diverge_at=None):
 
     def local_update(model, state, data, train, generator):
         if api.status()["round"] == diverge_at:
-            raise FloatingPointError("로컬 학습 손실이 nan입니다 (발산).")
+            raise TrainingDiverged("로컬 학습 손실이 nan입니다 (발산).")
         return original(model, state, data, train, generator)
 
     monkeypatch.setattr(program, "local_update", local_update)
-    plan = client_plan("metrics", env, AD, SEED, NUM_CLIENTS)
+    original_eval = program.evaluate_detailed
+
+    def evaluate_val(model, data, batch_size):
+        result = original_eval(model, data, batch_size)
+        # 집계가 끝나 서버 라운드가 nan_val_at + 1이 된 뒤의 검증 평가만 망가뜨린다
+        if data is VAL and api.status()["round"] == (nan_val_at or 0) + 1 and nan_val_at:
+            return replace(result, loss=float("nan"))
+        return result
+
+    monkeypatch.setattr(program, "evaluate_detailed", evaluate_val)
+    plan = client_plan("metrics", env, AD.with_overrides(attack=attack), SEED, NUM_CLIENTS)
     return run_clients(cfg, tmp_path, repo_root=tmp_path, server_url="unused", plan=plan, evaluate_test=True)
 
 
@@ -183,3 +195,20 @@ def test_divergence_from_initial_model_still_stops(tmp_path, monkeypatch):
     # 첫 라운드부터 발산하면 공격 결과가 아니라 설정 문제이므로 그대로 멈춘다
     with pytest.raises(FloatingPointError):
         _metrics_run(tmp_path, monkeypatch, rounds=2, diverge_at=1)
+
+
+
+def test_normal_run_divergence_stops(tmp_path, monkeypatch):
+    # 발산은 공격 실험의 결과로만 인정한다. 정상 실행이 발산하면 짧은 결과가 정상 기준값으로 섞이지 않게 멈춘다
+    with pytest.raises(TrainingDiverged):
+        _metrics_run(tmp_path, monkeypatch, rounds=3, diverge_at=2, attack=False)
+
+
+def test_broken_global_model_is_divergence_of_that_round(tmp_path, monkeypatch):
+    # 로컬 손실은 유한한데 집계된 전역 모델이 깨진 경우: 그 라운드를 발산으로 보고 이전 모델로 평가한다
+    summary = _metrics_run(tmp_path, monkeypatch, rounds=3, nan_val_at=2)
+
+    assert (summary["diverged_round"], summary["rounds_completed"]) == (2, 1)
+    with (tmp_path / "class_acc.csv").open(encoding="utf-8") as f:
+        test_rows = [row for row in csv.DictReader(f) if row["split"] == "test"]
+    assert {row["round"] for row in test_rows} == {"1"}   # 평가한 모델의 라운드

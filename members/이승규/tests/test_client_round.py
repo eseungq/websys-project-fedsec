@@ -12,8 +12,16 @@ import torch
 
 from fedsec.aggregation.fedavg import apply_update, weighted_average
 from fedsec.aggregation.norms import update_norm
-from fedsec.client.local_train import TrainConfig, local_update
-from fedsec.client.program import check_decision, check_reply, check_server, client_plan, fetch_snapshot, run_round
+from fedsec.client.local_train import TrainConfig, TrainingDiverged, local_update
+from fedsec.client.program import (
+    check_decision,
+    check_plan,
+    check_reply,
+    check_server,
+    client_plan,
+    fetch_snapshot,
+    run_round,
+)
 from fedsec.data.cifar10 import TensorData
 from fedsec.environments.acceptance import judge_round
 from fedsec.environments.config import load_env_config
@@ -80,7 +88,9 @@ def _round(env, attack_defense):
     policy = scenario_policy(env, build_defense(attack_defense), SEED, NUM_CLIENTS)
     start = initial_global_state(SEED, CFG.model)
     api = FlaskApi(create_app(ServerState(start, num_clients=NUM_CLIENTS, policy=policy)).test_client())
-    plan = client_plan("test", env, attack_defense, SEED, NUM_CLIENTS)
+    # 서버의 갱신 안 함 처리(채택 3개 미만)를 보려고 일부러 갱신될 수 없는 조합도 만들므로, 그 검사만 건너뛴다.
+    # 서버와 run_round에는 원래 min_accepted를 쓴다 (plan.min_accepted는 check_server에서만 쓰임)
+    plan = client_plan("test", replace(env, min_accepted=0), attack_defense, SEED, NUM_CLIENTS)
     snapshot = fetch_snapshot(api, CPU, expected_round=1)
     row, rows, next_snapshot, _ = run_round(api, build_model(CFG.model), snapshot, CLIENTS, VAL, CFG, plan,
                                          env.min_accepted, CPU)
@@ -343,3 +353,21 @@ def test_server_api_raises_on_failed_aggregate(live_server):
 
     with pytest.raises(RuntimeError, match="/aggregate 실패"):
         api.aggregate()
+
+
+
+def test_non_finite_global_model_raises_divergence():
+    state = initial_global_state(SEED, CFG.model)
+    broken = {**state, next(iter(state)): torch.full_like(next(iter(state.values())), float("inf"))}
+
+    with pytest.raises(TrainingDiverged):
+        local_update(build_model(CFG.model), broken, CLIENTS[0], CFG.train, client_generator(SEED, 1, 0))
+
+
+def test_min_accepted_must_be_reachable_after_late_clients():
+    # 지연 클라이언트는 항상 late로 빠지므로, 남는 인원이 min_accepted보다 적으면 모델이 한 번도 갱신되지 않는다
+    env = replace(_env("delay"), min_accepted=8)
+    plan_delayed = (0, 1, 2)
+
+    with pytest.raises(ValueError, match="지연"):
+        check_plan(env, False, (), plan_delayed, NUM_CLIENTS)

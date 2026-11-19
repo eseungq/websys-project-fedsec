@@ -235,7 +235,8 @@ def test_diverged_run_counts_rounds_until_divergence(tmp_path):
                  clients_logged=12 * NUM_CLIENTS)
 
     assert run_status(tmp_path / run.name, expected) == ("done", [])
-    assert index_rows(tmp_path, [run], {run: "done"})[0]["diverged_round"] == 13
+    row = index_rows(tmp_path, [run], {run: "done"})[0]
+    assert (row["diverged_round"], row["rounds_completed"]) == (13, 12)
 
 
 @pytest.mark.parametrize("value", [1, 41, "13", True])
@@ -272,3 +273,39 @@ def test_rounds_option_rejects_non_positive(text):
 
     with pytest.raises((argparse.ArgumentTypeError, ValueError)):   # argparse는 둘 다 잘못된 값으로 처리
         positive_int(text)
+
+
+def test_diverged_normal_run_is_incomplete(tmp_path):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    summary = json.dumps({**json.loads(SUMMARY), "diverged_round": 13, "rounds_completed": 12})
+    write_result(tmp_path / run.name, saved_config(expected), summary, rounds_logged=12,
+                 clients_logged=12 * NUM_CLIENTS)
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and "정상 실행" in problems[0]
+
+
+def test_diverged_rounds_completed_must_match(tmp_path):
+    run = plan_runs(["baseline"], ["attack"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    summary = json.dumps({**json.loads(SUMMARY), "diverged_round": 13, "rounds_completed": 20})
+    write_result(tmp_path / run.name, saved_config(expected), summary, rounds_logged=12,
+                 clients_logged=12 * NUM_CLIENTS)
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and "rounds_completed" in problems[0]
+
+
+def test_finished_run_with_missing_outputs_stops_matrix(tmp_path):
+    # 실행 프로세스가 0으로 끝나도 산출물이 덜 쓰였으면 다음 실행으로 넘어가지 않는다
+    from run_matrix import check_finished
+
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY, skip=("class_acc.csv",))
+
+    with pytest.raises(SystemExit):
+        check_finished(tmp_path, run, expected)

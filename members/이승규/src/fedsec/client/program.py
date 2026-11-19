@@ -10,6 +10,7 @@
 """
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -18,7 +19,7 @@ import torch
 
 from fedsec.aggregation.norms import update_norm
 from fedsec.attacks.collusion import collusion_vectors
-from fedsec.client.local_train import ClientResult, local_update
+from fedsec.client.local_train import ClientResult, TrainingDiverged, local_update
 from fedsec.data.cifar10 import TensorData, load_cifar10
 from fedsec.data.split import load_split
 from fedsec.environments.acceptance import RoundDecision, judge_round
@@ -110,6 +111,8 @@ def check_plan(env: EnvConfig, attack: bool, malicious: tuple[int, ...], delayed
                num_clients: int) -> None:
     """설정 조합이 실험 이름과 다른 실험을 만들지 않는지 확인한다 (예: 악성 0명인 공격 실험)."""
     per_round = env.per_round or num_clients
+    # 지연 클라이언트가 가장 적게 뽑힌 라운드의 채택 가능 인원 (지연은 항상 마감을 넘음: check_delay_setting)
+    reachable = per_round - max(0, len(delayed) - (num_clients - per_round))
     checks = [
         (not attack or len(malicious) > 0, "공격을 켰는데 악성 클라이언트가 없습니다."),
         (not env.delayed_avoid_malicious or not set(delayed) & set(malicious),
@@ -117,6 +120,9 @@ def check_plan(env: EnvConfig, attack: bool, malicious: tuple[int, ...], delayed
         (per_round <= num_clients, f"per_round {per_round}가 클라이언트 수 {num_clients}보다 큽니다."),
         (env.min_accepted <= per_round,
          f"min_accepted {env.min_accepted}가 라운드 참여자 수 {per_round}보다 커서 모델이 한 번도 갱신되지 않습니다."),
+        (env.min_accepted <= reachable,
+         (f"지연 {len(delayed)}명은 항상 late로 빠지므로 한 라운드에 많아야 {reachable}명만 채택되는데, "
+          f"min_accepted가 {env.min_accepted}라 모델이 한 번도 갱신되지 않습니다.")),
     ]
     problems = [message for ok, message in checks if not ok]
     if problems:
@@ -297,6 +303,9 @@ def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, client
     model.load_state_dict(next_snapshot.state)
     val_eval = evaluate_detailed(model, val, cfg.eval_bs)
     t_end = timed_now(device)
+    # 업데이트는 유한해도 집계한 전역 모델이 깨질 수 있다. 이 라운드를 발산으로 보고 이전 모델로 평가하게 한다
+    if not math.isfinite(val_eval.loss) or not all(torch.isfinite(v).all() for v in next_snapshot.state.values()):
+        raise TrainingDiverged(f"라운드 {snapshot.round} 집계 뒤 전역 모델 또는 검증 손실이 NaN·inf입니다 (발산).")
 
     excluded = {cid: s.reason for cid, s in sent.items() if not s.accepted}
     decision = judge_round(snapshot.participants, excluded, plan.malicious, len(clients), min_accepted)
@@ -369,10 +378,11 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
         try:
             row, rows_by_client, next_snapshot, val_eval = run_round(api, model, snapshot, clients, val, cfg, plan,
                                                                      status["min_accepted"], device)
-        except FloatingPointError as error:
-            if not rows:
-                raise   # 초기 모델에서 바로 발산하면 공격 결과가 아니라 설정 문제
-            # 로컬 학습은 제출 전에 끝나므로 이 라운드의 서버 상태는 그대로다. 발산 전 전역 모델로 결과를 남긴다
+        except TrainingDiverged as error:
+            # 발산은 공격 실험의 결과로만 인정한다. 정상 실행이나 첫 라운드의 발산은 설정 문제이므로 멈춘다
+            if not rows or not plan.attack:
+                raise
+            # 이 라운드는 기록하지 않고, 발산 전(지난 라운드 끝) 전역 모델로 결과를 남긴다
             diverged_round = round_idx
             print(f"라운드 {round_idx}에서 발산 ({error}) → 라운드 {round_idx - 1}의 전역 모델로 평가하고 끝냄")
             save_state(snapshot.state, checkpoint_path(out_dir, round_idx - 1))
