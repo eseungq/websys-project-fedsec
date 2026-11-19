@@ -49,7 +49,7 @@ NUM_CLASSES = 10    # CIFAR-10. class_acc.csv는 라운드마다 클래스 10줄
 # 실행 환경 (기기가 다르면 같은 시드도 결과가 조금 다를 수 있어, 비교표에서 섞였는지 보이게 한다)
 RUN_ENV_KEYS = ("device", "gpu", "torch", "commit", "dirty")
 # 클래스별·클라이언트별 비교에 쓰는 로그와 라운드당 줄 수. 완료한 라운드마다 검증 행, 끝에 테스트 행이 있어야 한다
-ACC_LOGS = {"class_acc.csv": NUM_CLASSES, "client_acc.csv": NUM_CLIENTS}
+ACC_LOGS = {"class_acc.csv": ("class", NUM_CLASSES), "client_acc.csv": ("client", NUM_CLIENTS)}
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "diverged_round", "rounds_completed", "rounds_not_updated",
                 "total_virtual_time", "total_sec")
 # 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
@@ -155,24 +155,45 @@ def output_problems(out_dir: Path, rounds: int) -> list[str]:
     logged = _count_rows(out_dir / "clients.csv")
     if logged != rounds * NUM_CLIENTS:
         problems.append(f"clients.csv가 {logged}줄 (설정 {rounds}라운드 × 클라이언트 {NUM_CLIENTS}명)")
-    for name, per_round in ACC_LOGS.items():
-        splits = _count_splits(out_dir / name)
-        if splits.get("val", 0) != rounds * per_round:
-            problems.append(f"{name} 검증 행이 {splits.get('val', 0)}줄 ({rounds}라운드 × {per_round})")
-        test_rows = per_round if rounds > 0 else 0    # 1라운드에 발산한 실행은 평가할 모델이 없다
-        if splits.get("test", 0) != test_rows:
-            problems.append(f"{name} 테스트 행이 {splits.get('test', 0)}줄 ({test_rows})")
+    for name, (id_key, per_round) in ACC_LOGS.items():
+        problems += acc_log_problems(out_dir / name, id_key, per_round, rounds)
     if not _read_json(out_dir / "env.json"):
         problems.append("env.json을 읽을 수 없음")
     return problems
 
 
-def _count_splits(path: Path) -> dict[str, int]:
+def acc_log_problems(path: Path, id_key: str, per_round: int, rounds: int) -> list[str]:
+    """평가 로그에 (라운드, 분할, 클래스·클라이언트 ID)마다 정확히 한 줄씩 있는지. 행 수만 세면 라운드가 통째로
+    빠지고 다른 라운드가 중복돼도 통과한다. 1라운드에 발산한 실행(rounds 0)은 평가할 모델이 없어 테스트 행도 없다."""
+    expected = {(r, "val", i) for r in range(1, rounds + 1) for i in range(per_round)}
+    expected |= {(rounds, "test", i) for i in range(per_round)} if rounds > 0 else set()
+    counts = Counter(_acc_keys(path, id_key))
+    missing = sorted(expected - counts.keys())
+    duplicated = sorted(key for key, n in counts.items() if n > 1 and key in expected)
+    unexpected = sorted((key for key in counts if key not in expected), key=str)
+    parts = [f"{label} {len(keys)}개 (예: {_key_text(keys[0], id_key)})"
+             for label, keys in (("빠진 행", missing), ("중복 행", duplicated), ("예상 밖 행", unexpected)) if keys]
+    return [f"{path.name}: " + ", ".join(parts)] if parts else []
+
+
+def _acc_keys(path: Path, id_key: str) -> list[tuple]:
     try:
         with path.open(encoding="utf-8") as f:
-            return dict(Counter(row.get("split") for row in csv.DictReader(f)))
+            return [_acc_key(row, id_key) for row in csv.DictReader(f)]
     except OSError:
-        return {}
+        return []
+
+
+def _acc_key(row: dict, id_key: str) -> tuple:
+    try:
+        return int(row["round"]), row["split"], int(row[id_key])
+    except (KeyError, TypeError, ValueError):
+        return row.get("round"), row.get("split"), row.get(id_key)   # 형식이 틀린 줄은 예상 밖 행으로 잡힌다
+
+
+def _key_text(key: tuple, id_key: str) -> str:
+    round_idx, split, item = key
+    return f"{round_idx}라운드 {split} {id_key} {item}"
 
 
 def _count_rows(path: Path) -> int:

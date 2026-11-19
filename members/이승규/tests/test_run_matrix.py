@@ -189,9 +189,9 @@ def test_summary_accepts_accuracy_bounds(tmp_path, value):
 @pytest.mark.parametrize("kwargs, problem", [
     ({"rounds_logged": 39}, "rounds.csv가 39줄 (설정 40라운드)"),                       # 중간에 끊긴 로그
     ({"clients_logged": 399}, "clients.csv가 399줄 (설정 40라운드 × 클라이언트 10명)"),
-    ({"skip": ("class_acc.csv",)}, "class_acc.csv 검증 행이 0줄 (40라운드 × 10)"),
-    ({"acc_rounds": 1}, "class_acc.csv 검증 행이 10줄 (40라운드 × 10)"),     # 평가 로그만 중간에 잘림
-    ({"test_rows": False}, "class_acc.csv 테스트 행이 0줄 (10)"),
+    ({"skip": ("class_acc.csv",)}, "class_acc.csv: 빠진 행 410개 (예: 1라운드 val class 0)"),
+    ({"acc_rounds": 1}, "class_acc.csv: 빠진 행 400개 (예: 2라운드 val class 0)"),     # 평가 로그만 중간에 잘림
+    ({"test_rows": False}, "class_acc.csv: 빠진 행 10개 (예: 40라운드 test class 0)"),
     ({"skip": ("env.json",)}, "env.json을 읽을 수 없음"),
 ])
 def test_result_without_full_outputs_is_incomplete(tmp_path, kwargs, problem):
@@ -201,7 +201,7 @@ def test_result_without_full_outputs_is_incomplete(tmp_path, kwargs, problem):
 
     status, problems = run_status(tmp_path / run.name, expected)
 
-    assert status == "incomplete" and problems[0] == problem   # class_acc가 잘리면 client_acc 사유도 함께 나올 수 있음
+    assert status == "incomplete" and problems[0].startswith(problem)   # class_acc가 잘리면 client_acc 사유도 나옴
 
 
 def test_result_without_model_file_is_done(tmp_path):
@@ -345,3 +345,21 @@ def test_normal_run_diverged_in_first_round_is_incomplete(tmp_path):
     write_result(tmp_path / run.name, saved_config(expected), summary, rounds_logged=0, test_rows=False)
 
     assert run_status(tmp_path / run.name, expected)[0] == "incomplete"
+
+
+
+@pytest.mark.parametrize("name, id_key", [("class_acc.csv", "class"), ("client_acc.csv", "client")])
+def test_eval_log_with_swapped_round_is_incomplete(tmp_path, name, id_key):
+    # 행 수는 같지만 40라운드 검증 행이 빠지고 39라운드 행이 두 번 들어간 로그
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    write_result(tmp_path / run.name, saved_config(expected), SUMMARY)
+    path = tmp_path / run.name / name
+    lines = path.read_text(encoding="utf-8").splitlines()
+    swapped = [line.replace("40,val,", "39,val,", 1) if line.startswith("40,val,") else line for line in lines]
+    path.write_text("\n".join(swapped) + "\n", encoding="utf-8")
+
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete"
+    assert problems == [f"{name}: 빠진 행 10개 (예: 40라운드 val {id_key} 0), 중복 행 10개 (예: 39라운드 val {id_key} 0)"]

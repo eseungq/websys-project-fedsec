@@ -35,7 +35,7 @@ python scripts/run_experiment.py --name final --evaluate-test  # 설정 확정 �
 - 결과 폴더 이름(`--name`, `--prefix`, 서버 `--log-dir`)은 `experiments/` 아래만 된다(`../`, 절대 경로, `.partial`로 끝나는 이름 거부). 서버 기록 폴더에 이전 기록이 있으면 섞이지 않게 멈춘다
 
 **`run_matrix.py`의 완료 판정과 `runs.csv`** (`experiments/<prefix>/runs.csv`)
-- 끝난 실행: `summary.json`의 검증·테스트 정확도가 0\~1, 저장된 설정이 지금 설정과 같음, `rounds.csv`가 라운드 수(발산했으면 발산 전까지)만큼, `clients.csv`가 그 × 10줄, `class_acc.csv`·`client_acc.csv`에 완료한 라운드마다 검증 행(클래스 10개·클라이언트 10명)과 마지막 테스트 행이 모두 있음, `env.json`이 읽힘, 발산했으면 공격 실험이고 `rounds_completed`가 발산 라운드 − 1. `models/`는 커밋하지 않으므로 보지 않는다
+- 끝난 실행: `summary.json`의 검증·테스트 정확도가 0\~1, 저장된 설정이 지금 설정과 같음, `rounds.csv`가 라운드 수(발산했으면 발산 전까지)만큼, `clients.csv`가 그 × 10줄, `class_acc.csv`·`client_acc.csv`에 (라운드, 분할, 클래스·클라이언트 ID)마다 정확히 한 줄: 완료한 라운드마다 검증 행(클래스 10개·클라이언트 10명), 마지막에 테스트 행. 빠지거나 중복되거나 예상 밖인 행이 있으면 미완료, `env.json`이 읽힘, 발산했으면 공격 실험이고 `rounds_completed`가 발산 라운드 − 1. `models/`는 커밋하지 않으므로 보지 않는다
 - 1라운드에 발산한 공격 실험은 `diverged`(정확도 없음)로 표시하고 끝난 실행으로 친다
 - 설정이 다르면 `stale`, 산출물이 덜 쓰였거나 정상 실행이 발산했으면 `incomplete`로 표시하고 시작 전에 멈춘다(사유 출력). 실행 하나가 끝날 때마다도 같은 판정을 해서 `done`이 아니면 멈춘다
 - 열: 실행 이름·환경·공격·집계·시드·상태, `final_val_acc`, `final_test_acc`, `diverged_round`, `rounds_completed`, `rounds_not_updated`, `total_virtual_time`, `total_sec`, 실행 환경 `device`·`gpu`(GPU 모델명)·`torch`·`commit`·`dirty`(추적 중인 파일이 수정됐는지)
