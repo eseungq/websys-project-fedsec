@@ -23,6 +23,7 @@ import json
 import math
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,14 +45,16 @@ AGGREGATORS = ("fedavg", "clip_fedavg", "median")   # experiment.config.AGGREGAT
 DEFAULT_SEEDS = (0, 1, 2)
 DEFAULT_PREFIX = "matrix"
 NUM_CLIENTS = DEFAULT_NUM_CLIENTS
+NUM_CLASSES = 10    # CIFAR-10. class_acc.csv는 라운드마다 클래스 10줄
 # 실행 환경 (기기가 다르면 같은 시드도 결과가 조금 다를 수 있어, 비교표에서 섞였는지 보이게 한다)
 RUN_ENV_KEYS = ("device", "gpu", "torch", "commit", "dirty")
-# 클래스별·클라이언트별 비교에 쓰는 로그. 비어 있으면 끝난 실행으로 치지 않음
-REQUIRED_LOGS = ("class_acc.csv", "client_acc.csv")
+# 클래스별·클라이언트별 비교에 쓰는 로그와 라운드당 줄 수. 완료한 라운드마다 검증 행, 끝에 테스트 행이 있어야 한다
+ACC_LOGS = {"class_acc.csv": NUM_CLASSES, "client_acc.csv": NUM_CLIENTS}
 SUMMARY_KEYS = ("final_val_acc", "final_test_acc", "diverged_round", "rounds_completed", "rounds_not_updated",
                 "total_virtual_time", "total_sec")
 # 비교표에 꼭 있어야 하는 결과. 0~1 사이 유한한 숫자가 아니면 끝난 실행으로 치지 않음
 REQUIRED_SUMMARY_KEYS = ("final_val_acc", "final_test_acc")
+FINISHED = ("done", "diverged")    # 이어서 실행할 때 건너뛰는 상태
 
 
 @dataclass(frozen=True)
@@ -152,10 +155,24 @@ def output_problems(out_dir: Path, rounds: int) -> list[str]:
     logged = _count_rows(out_dir / "clients.csv")
     if logged != rounds * NUM_CLIENTS:
         problems.append(f"clients.csv가 {logged}줄 (설정 {rounds}라운드 × 클라이언트 {NUM_CLIENTS}명)")
-    problems += [f"{name} 없음 또는 비어 있음" for name in REQUIRED_LOGS if _count_rows(out_dir / name) == 0]
+    for name, per_round in ACC_LOGS.items():
+        splits = _count_splits(out_dir / name)
+        if splits.get("val", 0) != rounds * per_round:
+            problems.append(f"{name} 검증 행이 {splits.get('val', 0)}줄 ({rounds}라운드 × {per_round})")
+        test_rows = per_round if rounds > 0 else 0    # 1라운드에 발산한 실행은 평가할 모델이 없다
+        if splits.get("test", 0) != test_rows:
+            problems.append(f"{name} 테스트 행이 {splits.get('test', 0)}줄 ({test_rows})")
     if not _read_json(out_dir / "env.json"):
         problems.append("env.json을 읽을 수 없음")
     return problems
+
+
+def _count_splits(path: Path) -> dict[str, int]:
+    try:
+        with path.open(encoding="utf-8") as f:
+            return dict(Counter(row.get("split") for row in csv.DictReader(f)))
+    except OSError:
+        return {}
 
 
 def _count_rows(path: Path) -> int:
@@ -170,8 +187,8 @@ def _count_rows(path: Path) -> int:
 def diverged_problems(summary: dict, expected: dict) -> list[str]:
     """발산한 실행이 믿을 만한지. 발산은 공격 실험의 결과로만 인정한다 (정상 실행의 발산은 설정 문제)."""
     diverged, completed, rounds = summary["diverged_round"], summary.get("rounds_completed"), expected["rounds"]
-    if type(diverged) is not int or not 2 <= diverged <= rounds:
-        return [f"summary.json의 diverged_round가 2~{rounds} 사이 정수가 아님: {diverged!r}"]
+    if type(diverged) is not int or not 1 <= diverged <= rounds:
+        return [f"summary.json의 diverged_round가 1~{rounds} 사이 정수가 아님: {diverged!r}"]
     if not expected["plan"]["attack"]:
         return [f"정상 실행이 {diverged}라운드에 발산함 (공격 실험에서만 결과로 인정)"]
     if completed != diverged - 1:
@@ -179,7 +196,10 @@ def diverged_problems(summary: dict, expected: dict) -> list[str]:
     return []
 
 def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
-    """("todo" | "incomplete" | "stale" | "done", 다른 설정 또는 빠진 결과 목록)."""
+    """("todo" | "incomplete" | "stale" | "done" | "diverged", 다른 설정 또는 빠진 결과 목록).
+
+    done·diverged는 끝난 실행이다. diverged는 1라운드에 발산해 정확도가 없는 공격 실험 (비교표에서 따로 표시).
+    """
     if not out_dir.exists():
         return "todo", []
     summary = _read_json(out_dir / "summary.json")
@@ -191,20 +211,24 @@ def run_status(out_dir: Path, expected: dict) -> tuple[str, list[str]]:
         saved = None
     if not isinstance(saved, dict):
         return "incomplete", ["config.yaml 없음 또는 읽을 수 없음"]
-    problems = summary_problems(summary)
+    diverged = summary.get("diverged_round")
+    # 1라운드 집계 직후 깨진 공격 실험은 정확도가 없다 (비교표에 넣지 않는 별도 상태 diverged)
+    at_start = diverged == 1 and type(diverged) is int
+    problems = [] if at_start else summary_problems(summary)
     if problems:
         return "incomplete", problems
     mismatches = config_mismatches(saved, expected)
     if mismatches:
         return "stale", mismatches
-    diverged = summary.get("diverged_round")
     if diverged is not None:
         problems = diverged_problems(summary, expected)
         if problems:
             return "incomplete", problems
     # 발산한 실행은 발산 전 라운드까지만 로그가 있다 (program.run_clients)
     problems = output_problems(out_dir, expected["rounds"] if diverged is None else diverged - 1)
-    return ("incomplete", problems) if problems else ("done", [])
+    if problems:
+        return "incomplete", problems
+    return ("diverged", []) if at_start else ("done", [])
 
 
 def index_rows(prefix_dir: Path, runs: list[Run], statuses: dict[Run, str]) -> list[dict]:
@@ -212,8 +236,9 @@ def index_rows(prefix_dir: Path, runs: list[Run], statuses: dict[Run, str]) -> l
     for run in runs:
         out_dir = prefix_dir / run.name
         status = statuses[run]
-        summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8")) if status == "done" else {}
-        env = _read_json(out_dir / "env.json") if status == "done" else {}
+        finished = status in FINISHED
+        summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8")) if finished else {}
+        env = _read_json(out_dir / "env.json") if finished else {}
         rows.append({"name": run.name, "env": run.env, "attack": run.attack, "aggregator": run.aggregator,
                      "seed": run.seed, "status": status, **{key: summary.get(key, "") for key in SUMMARY_KEYS},
                      **{key: env.get(key, "") for key in RUN_ENV_KEYS}})
@@ -242,7 +267,7 @@ def write_index(prefix_dir: Path, rows: list[dict]) -> Path:
 def check_finished(prefix_dir: Path, run: Run, expected: dict) -> None:
     """실행 프로세스가 0으로 끝나도 산출물이 덜 쓰였거나 설정이 다르면 다음 실행으로 넘어가지 않는다."""
     status, problems = run_status(prefix_dir / run.name, expected)
-    if status != "done":
+    if status not in FINISHED:
         sys.exit(f"실행은 끝났지만 결과가 {status}입니다: {run.name}\n  " + "\n  ".join(problems))
 
 def main() -> None:

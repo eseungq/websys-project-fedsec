@@ -192,7 +192,7 @@ def test_run_without_divergence_records_none(tmp_path, monkeypatch):
 
 
 def test_divergence_from_initial_model_still_stops(tmp_path, monkeypatch):
-    # 첫 라운드부터 발산하면 공격 결과가 아니라 설정 문제이므로 그대로 멈춘다
+    # 1라운드 로컬 학습의 발산은 초기 모델에서 생긴 것이라 공격 결과가 아니다 (설정 문제) → 그대로 멈춘다
     with pytest.raises(FloatingPointError):
         _metrics_run(tmp_path, monkeypatch, rounds=2, diverge_at=1)
 
@@ -212,3 +212,13 @@ def test_broken_global_model_is_divergence_of_that_round(tmp_path, monkeypatch):
     with (tmp_path / "class_acc.csv").open(encoding="utf-8") as f:
         test_rows = [row for row in csv.DictReader(f) if row["split"] == "test"]
     assert {row["round"] for row in test_rows} == {"1"}   # 평가한 모델의 라운드
+
+
+
+def test_attack_broken_in_first_round_records_without_accuracy(tmp_path, monkeypatch):
+    # 1라운드 집계 직후 전역 모델이 깨지면(공격의 결과) 실행을 멈추지 않고, 정확도 없이 diverged_round=1로 남긴다
+    summary = _metrics_run(tmp_path, monkeypatch, rounds=3, nan_val_at=1)
+
+    assert (summary["diverged_round"], summary["rounds_completed"]) == (1, 0)
+    assert summary["final_val_acc"] is None and summary["final_test_acc"] is None
+    assert json.loads((tmp_path / "summary.json").read_text())["rounds_completed"] == 0

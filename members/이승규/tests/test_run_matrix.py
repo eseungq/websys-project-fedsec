@@ -11,7 +11,7 @@ MEMBER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEMBER_ROOT / "scripts"))
 import yaml
 from run_clients import EXPERIMENTS_DIR
-from run_matrix import NUM_CLIENTS, Run, expected_config, index_rows, plan_runs, run_status
+from run_matrix import NUM_CLASSES, NUM_CLIENTS, Run, expected_config, index_rows, plan_runs, run_status
 
 from fedsec.experiment.config import AGGREGATORS
 
@@ -55,18 +55,29 @@ def saved_config(expected: dict, **server) -> dict:
     return {**expected, "server": {"min_accepted": expected["plan"]["min_accepted"], **server}}
 
 
-def write_result(out_dir, config, summary, rounds_logged=None, clients_logged=None, skip=()):
-    """끝난 실행처럼 config.yaml, summary.json과 비교에 필요한 산출물을 만든다. skip에 적은 파일은 만들지 않는다."""
+def _acc_lines(header: str, rounds: int, per_round: int, test: bool) -> str:
+    rows = [f"{r},val,{i}" for r in range(1, rounds + 1) for i in range(per_round)]
+    rows += [f"{rounds},test,{i}" for i in range(per_round)] if test else []
+    return header + "\n" + "".join(f"{row}\n" for row in rows)
+
+
+def write_result(out_dir, config, summary, rounds_logged=None, clients_logged=None, acc_rounds=None, test_rows=True,
+                 skip=()):
+    """끝난 실행처럼 config.yaml, summary.json과 비교에 필요한 산출물을 만든다. skip에 적은 파일은 만들지 않는다.
+
+    class_acc.csv·client_acc.csv는 run_clients처럼 라운드마다 검증 행(클래스 10개, 클라이언트 10명)과 마지막 테스트 행.
+    """
     out_dir.mkdir(parents=True)
     n = config["rounds"] if rounds_logged is None else rounds_logged
-    m = config["rounds"] * NUM_CLIENTS if clients_logged is None else clients_logged
+    m = n * NUM_CLIENTS if clients_logged is None else clients_logged
+    a = n if acc_rounds is None else acc_rounds
     files = {
         "config.yaml": yaml.safe_dump(config, allow_unicode=True),
         "summary.json": summary,
         "rounds.csv": "round\n" + "".join(f"{r}\n" for r in range(1, n + 1)),
         "clients.csv": "round\n" + "1\n" * m,
-        "class_acc.csv": "round,split,class\n1,val,0\n",
-        "client_acc.csv": "round,client\n1,0\n",
+        "class_acc.csv": _acc_lines("round,split,class", a, NUM_CLASSES, test_rows),
+        "client_acc.csv": _acc_lines("round,split,client", a, NUM_CLIENTS, test_rows),
         "env.json": json.dumps({"device": "mps", "gpu": None, "torch": "2.15.0", "commit": "abc", "dirty": False}),
     }
     for name, text in files.items():
@@ -178,8 +189,9 @@ def test_summary_accepts_accuracy_bounds(tmp_path, value):
 @pytest.mark.parametrize("kwargs, problem", [
     ({"rounds_logged": 39}, "rounds.csv가 39줄 (설정 40라운드)"),                       # 중간에 끊긴 로그
     ({"clients_logged": 399}, "clients.csv가 399줄 (설정 40라운드 × 클라이언트 10명)"),
-    ({"skip": ("class_acc.csv",)}, "class_acc.csv 없음 또는 비어 있음"),
-    ({"skip": ("client_acc.csv",)}, "client_acc.csv 없음 또는 비어 있음"),
+    ({"skip": ("class_acc.csv",)}, "class_acc.csv 검증 행이 0줄 (40라운드 × 10)"),
+    ({"acc_rounds": 1}, "class_acc.csv 검증 행이 10줄 (40라운드 × 10)"),     # 평가 로그만 중간에 잘림
+    ({"test_rows": False}, "class_acc.csv 테스트 행이 0줄 (10)"),
     ({"skip": ("env.json",)}, "env.json을 읽을 수 없음"),
 ])
 def test_result_without_full_outputs_is_incomplete(tmp_path, kwargs, problem):
@@ -187,7 +199,9 @@ def test_result_without_full_outputs_is_incomplete(tmp_path, kwargs, problem):
     expected = expected_config(run, "m", rounds=None)
     write_result(tmp_path / run.name, saved_config(expected), SUMMARY, **kwargs)
 
-    assert run_status(tmp_path / run.name, expected) == ("incomplete", [problem])
+    status, problems = run_status(tmp_path / run.name, expected)
+
+    assert status == "incomplete" and problems[0] == problem   # class_acc가 잘리면 client_acc 사유도 함께 나올 수 있음
 
 
 def test_result_without_model_file_is_done(tmp_path):
@@ -239,7 +253,7 @@ def test_diverged_run_counts_rounds_until_divergence(tmp_path):
     assert (row["diverged_round"], row["rounds_completed"]) == (13, 12)
 
 
-@pytest.mark.parametrize("value", [1, 41, "13", True])
+@pytest.mark.parametrize("value", [0, 41, "13", True])
 def test_diverged_round_outside_rounds_is_incomplete(tmp_path, value):
     run = plan_runs(["baseline"], ["attack"], ["fedavg"], [0])[0]
     expected = expected_config(run, "m", rounds=None)
@@ -309,3 +323,25 @@ def test_finished_run_with_missing_outputs_stops_matrix(tmp_path):
 
     with pytest.raises(SystemExit):
         check_finished(tmp_path, run, expected)
+
+
+
+def test_attack_diverged_in_first_round_is_separate_status(tmp_path):
+    # 1라운드 집계 직후 전역 모델이 깨진 공격 실험: 비교표에 넣을 정확도는 없지만 끝난 실행으로 보고 다음 조합으로 넘어간다
+    run = plan_runs(["baseline"], ["attack"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    summary = json.dumps({"final_val_acc": None, "final_test_acc": None, "diverged_round": 1, "rounds_completed": 0})
+    write_result(tmp_path / run.name, saved_config(expected), summary, rounds_logged=0, test_rows=False)
+
+    assert run_status(tmp_path / run.name, expected) == ("diverged", [])
+    row = index_rows(tmp_path, [run], {run: "diverged"})[0]
+    assert (row["status"], row["final_test_acc"], row["rounds_completed"]) == ("diverged", None, 0)
+
+
+def test_normal_run_diverged_in_first_round_is_incomplete(tmp_path):
+    run = plan_runs(["baseline"], ["normal"], ["fedavg"], [0])[0]
+    expected = expected_config(run, "m", rounds=None)
+    summary = json.dumps({"final_val_acc": None, "final_test_acc": None, "diverged_round": 1, "rounds_completed": 0})
+    write_result(tmp_path / run.name, saved_config(expected), summary, rounds_logged=0, test_rows=False)
+
+    assert run_status(tmp_path / run.name, expected)[0] == "incomplete"

@@ -129,6 +129,15 @@ def check_plan(env: EnvConfig, attack: bool, malicious: tuple[int, ...], delayed
         raise ValueError(f"{env.name} 환경 설정 오류: " + " ".join(problems))
 
 
+
+class GlobalModelDiverged(TrainingDiverged):
+    """집계한 전역 모델이 깨졌다. 1라운드에서도 공격 업데이트가 원인일 수 있다 (로컬 발산은 초기 모델에서 생기지 않음)."""
+
+
+def is_attack_result(error: TrainingDiverged, rounds_done: int, attack: bool) -> bool:
+    """이 발산을 공격 실험의 결과로 남길지. 정상 실행이나 초기 모델에서의 로컬 발산은 설정 문제이므로 False."""
+    return attack and (rounds_done > 0 or isinstance(error, GlobalModelDiverged))
+
 @dataclass(frozen=True)
 class Snapshot:
     round: int
@@ -305,7 +314,7 @@ def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, client
     t_end = timed_now(device)
     # 업데이트는 유한해도 집계한 전역 모델이 깨질 수 있다. 이 라운드를 발산으로 보고 이전 모델로 평가하게 한다
     if not math.isfinite(val_eval.loss) or not all(torch.isfinite(v).all() for v in next_snapshot.state.values()):
-        raise TrainingDiverged(f"라운드 {snapshot.round} 집계 뒤 전역 모델 또는 검증 손실이 NaN·inf입니다 (발산).")
+        raise GlobalModelDiverged(f"라운드 {snapshot.round} 집계 뒤 전역 모델 또는 검증 손실이 NaN·inf입니다 (발산).")
 
     excluded = {cid: s.reason for cid, s in sent.items() if not s.accepted}
     decision = judge_round(snapshot.participants, excluded, plan.malicious, len(clients), min_accepted)
@@ -379,8 +388,7 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
             row, rows_by_client, next_snapshot, val_eval = run_round(api, model, snapshot, clients, val, cfg, plan,
                                                                      status["min_accepted"], device)
         except TrainingDiverged as error:
-            # 발산은 공격 실험의 결과로만 인정한다. 정상 실행이나 첫 라운드의 발산은 설정 문제이므로 멈춘다
-            if not rows or not plan.attack:
+            if not is_attack_result(error, len(rows), plan.attack):
                 raise
             # 이 라운드는 기록하지 않고, 발산 전(지난 라운드 끝) 전역 모델로 결과를 남긴다
             diverged_round = round_idx
@@ -398,10 +406,14 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
         print(" ".join(f"{k}={row[k]}" for k in PRINT_KEYS))
 
     (out_dir / "server_status.json").write_text(json.dumps(api.status(), indent=2, ensure_ascii=False), encoding="utf-8")
-    summary = {**_summary(rows), "experiment": plan.experiment_id, "env": plan.env_name, "attack": plan.attack,
-               "aggregator": rows[-1]["aggregator"], "seed": cfg.seed,
-               "diverged_round": diverged_round, "rounds_completed": len(rows)}
-    if evaluate_test:
+    summary = {"experiment": plan.experiment_id, "env": plan.env_name, "attack": plan.attack, "seed": cfg.seed,
+               "aggregator": status["aggregator"], "diverged_round": diverged_round, "rounds_completed": len(rows)}
+    if not rows:
+        # 1라운드 집계 직후 전역 모델이 깨진 공격 실험: 비교표에 넣을 정확도가 없다 (run_matrix 상태 diverged)
+        summary = {**summary, "final_val_acc": None, "final_test_acc": None}
+    else:
+        summary = {**_summary(rows), **summary}
+    if evaluate_test and rows:
         model.load_state_dict(snapshot.state)
         test_eval = evaluate_detailed(model, test, cfg.eval_bs)
         summary = {**summary, "final_test_acc": round(test_eval.acc, 4), "final_test_loss": round(test_eval.loss, 4)}
