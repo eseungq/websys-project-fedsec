@@ -1,3 +1,3 @@
 # 02_plan — 계획서
 
-- `plan.md`: 단계별 일정, 역할 분담, 마일스톤 (GitHub Milestones와 맞춤)
+- `plan.md`: 단계별 일정, 역할 분담, 마일스톤

@@ -15,6 +15,12 @@
 | [Google Research 블로그: Federated Analytics](https://research.google/blog/federated-analytics-collaborative-data-science-without-data-collection/) | 학습이 아니라 통계·분석을 데이터 수집 없이 하는 방법. 연합학습과 비교할 때 참고 | 배경 | |
 | [PyTorch CIFAR-10 분류 튜토리얼](https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html) | 명세와 같은 데이터셋으로 이미지 분류 모델을 학습하는 기본 예제 | 1 | |
 
+## 팀 자료
+
+| 자료 | 한 줄 요약 | 관련 단계 | 본 사람 |
+|---|---|---|---|
+| [Kaggle 노트북: fedavg](https://www.kaggle.com/code/chojunhyeop/fedavg) | 공개 코드 `Federated-Learning-PyTorch`로 CIFAR-10 FedAvg를 Kaggle GPU에서 실행 | 1 | 조준협 |
+
 ## 논문
 
 | 자료 | 한 줄 요약 | 관련 단계 | 본 사람 |
@@ -32,19 +38,8 @@
 | [google-research/federated](https://github.com/google-research/federated) | Google Research의 연합학습 연구 코드 모음. TensorFlow Federated 기반 | 1–2 (참고) | |
 | [google-parfait/tensorflow-federated](https://github.com/google-parfait/tensorflow-federated) | TensorFlow Federated(TFF) 프레임워크 | 1–2 (참고) | |
 
-> ⚠️ 위의 Google 코드 두 개는 **TensorFlow** 기반이고, DLG 공개 구현은 **PyTorch** 기반입니다. 명세의 "FedAvg 공개 구현"으로 무엇을 쓸지, 프레임워크를 무엇으로 통일할지 정해서 `docs/decisions/`에 기록해야 합니다.
-
 ## 실행 환경
 
 | 자료 | 한 줄 요약 | 관련 단계 | 본 사람 |
 |---|---|---|---|
 | [Kaggle](https://www.kaggle.com) | 무료 GPU 노트북. 본 실험 실행용 | 4–5 | |
-
-## 확인이 필요한 자료
-
-다른 분석에서 인용된 자료입니다. 보고서에 인용하기 전에 제목과 내용이 주장과 맞는지 확인합니다.
-
-| 자료 | 인용된 맥락 | 확인 |
-|---|---|---|
-| [ICML 2023 (PMLR v202, liu23d)](https://proceedings.mlr.press/v202/liu23d/liu23d.pdf) | 데이터 이질성 환경에서 강건 집계의 한계 | [ ] |
-| [NeurIPS 2023 (2082273791021571c410f41d565d0b45)](https://papers.neurips.cc/paper_files/paper/2023/hash/2082273791021571c410f41d565d0b45-Abstract-Conference.html) | 복원 이미지의 프라이버시 위험을 화질 지표로만 평가하는 문제 | [ ] |
