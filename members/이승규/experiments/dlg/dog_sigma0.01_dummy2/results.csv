@@ -1,0 +1,2 @@
+image_index,label,class,sigma,grad_sq_norm,iterations,iterations_done,diverged,mse,mse_unclipped,max_abs_pixel,grad_diff,noise_sq_norm,grad_diff_over_noise,pred_label,label_correct,seconds
+27,5,dog,0.01,941.7076096150007,300,300,False,0.03869890794157982,0.07498551160097122,3.045839548110962,1.2817736864089966,1.5882024120766067,0.8070594004029068,5,True,6.5
