@@ -18,13 +18,17 @@ checkpoints/*
 !checkpoints/README.md
 
 # 실험 결과: 요약(config, env, summary)만 커밋하고 원시 로그는 제외
-experiments/*/logs/
-experiments/*/models/
-experiments/*/dlg_images/
+**/experiments/**/logs/
+**/experiments/**/models/
+**/experiments/**/dlg_images/
 
 # 과제 명세 원본 (저작권·공개 전환 대비, 각자 로컬 보관)
 docs/00_spec/*.pdf
 
 # Frontend
 node_modules/
-web/frontend/dist/
+
+# 조원 폴더의 데이터, 모델 파일, 노트북 체크포인트
+members/*/data/
+*.pt
+.ipynb_checkpoints/
