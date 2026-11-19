@@ -67,7 +67,7 @@ python scripts/make_split.py --show-dist configs/splits/iid_seed0.json   # 분�
 |---|---|
 | 모델 | `simple_cnn` (BatchNorm 없음) |
 | 라운드 | 40 |
-| 옵티마이저 | SGD, lr 0.01, momentum 0.9, weight_decay 0 |
+| 옵티마이저 | SGD, lr 0.01, momentum 0.9, weight_decay 5e-4 |
 | local_ep / local_bs | 1 / 32 |
 | 시드 | 0 |
 | 분할 | `configs/splits/iid_seed0.json` (레포 루트) |
@@ -76,14 +76,14 @@ python scripts/make_split.py --show-dist configs/splits/iid_seed0.json   # 분�
 ## 결과 요약
 **[학습 설정 결과](docs/학습설정-결과.md)** (11/18 \~ 11/19, 실험 7개)
 
-- 추천: momentum 0.9, lr 0.01, local_ep 1, local_bs 32, 40라운드 + **weight_decay 5e-4** (제안 단계, `configs/base.yaml`에는 아직 반영하지 않음)
+- 추천: momentum 0.9, lr 0.01, local_ep 1, local_bs 32, 40라운드 + **weight_decay 5e-4** (`configs/base.yaml`에 반영)
 - 시드 0\~2 평균 검증 정확도(마지막 5라운드) 75.44% → **76.40%** (+0.96%p)
 - 실험 1회(40라운드) 로컬 MPS 약 2.5분, Kaggle T4 약 2.2분
 - 결과 폴더 [`experiments/`](experiments/), 비교표 [`experiments/sweep/_tables/`](experiments/sweep/_tables/)
 
 **[DLG 결과](docs/DLG-결과.md)** (11/19, 이미지 5장 × 노이즈 7단계)
 
-- 노이즈 제안: 작음 σ 1e-2(형체 남음, MSE 0.05\~0.08), 큼 σ 1e-1(형체 없음, 무작위 수준) (제안 단계, 팀 확인 전)
+- 노이즈: 작음 σ 1e-2(형체 남음, MSE 0.05\~0.08), 큼 σ 1e-1(형체 없음, 무작위 수준) (`configs/dlg.yaml`에 반영)
 - 노이즈로 레이블은 지켜지지 않음 (σ 1e-1에서도 5장 모두 복원)
 - 복원이 멈춘 사례 1건(dog, σ 1e-2)은 노이즈가 아니라 최적화 초반 폭주 → 6단계 원인 분석 사례 후보
 

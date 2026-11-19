@@ -11,7 +11,7 @@ train:
   optimizer: sgd
   lr: 0.01
   momentum: 0.9              # 라운드마다 새 옵티마이저 → momentum은 로컬 학습 안에서만 누적
-  weight_decay: 0.0
+  weight_decay: 0.0005       # 학습 설정 결과 (docs/학습설정-결과.md 실험 4, 5)
   local_ep: 1
   local_bs: 32
 

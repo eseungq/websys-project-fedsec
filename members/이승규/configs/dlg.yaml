@@ -13,8 +13,8 @@ model_seed: 0        # LeNet 가중치 U(-0.5, 0.5)
 dummy_seed: 0        # 복원 시작 더미 이미지·soft label
 noise_seed: 0        # 방어 노이즈
 
-# 노이즈 표준편차 σ 목록 (0 = 방어 없음). 팀이 "없음·작음·큼"을 고르기 위한 탐색 범위
-sigmas: [0, 1e-4, 1e-3, 1e-2, 1e-1]
+# 노이즈 표준편차 σ: 없음 0, 작음 1e-2, 큼 1e-1 (근거 docs/DLG-결과.md. 탐색은 --sigmas로)
+sigmas: [0, 1e-2, 1e-1]
 # 복원 반복 횟수 목록 (L-BFGS step 수. 원 논문 코드 300)
 iterations: [300]
 record_every: 10     # 궤적(그래디언트 차이, MSE)을 남기는 간격
