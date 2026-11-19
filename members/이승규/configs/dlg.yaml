@@ -1,4 +1,4 @@
-# 모델 역추적(DLG) 소규모 실험 설정 (이승규, 제안). 결과와 근거: docs/DLG-결과.md
+# 모델 역추적(DLG) 소규모 실험 설정 (이승규, 제안). 결과와 근거: docs/3_DLG-결과.md
 # 연합학습 본 실험과 분리된 실험. CPU에서만 실행한다.
 # split, data_root는 레포 루트 기준 경로 (팀 공용 분할 파일·데이터)
 split: configs/splits/iid_seed0.json
@@ -13,7 +13,7 @@ model_seed: 0        # LeNet 가중치 U(-0.5, 0.5)
 dummy_seed: 0        # 복원 시작 더미 이미지·soft label
 noise_seed: 0        # 방어 노이즈
 
-# 노이즈 표준편차 σ: 없음 0, 작음 1e-2, 큼 1e-1 (근거 docs/DLG-결과.md. 탐색은 --sigmas로)
+# 노이즈 표준편차 σ: 없음 0, 작음 1e-2, 큼 1e-1 (근거 docs/3_DLG-결과.md. 탐색은 --sigmas로)
 sigmas: [0, 1e-2, 1e-1]
 # 복원 반복 횟수 목록 (L-BFGS step 수. 원 논문 코드 300)
 iterations: [300]

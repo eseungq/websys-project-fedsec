@@ -124,7 +124,7 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 | `configs/splits/label_skew_a0.5_seed0.json` | 레이블 편향 분할 (IID 분할은 레포 루트 `configs/splits/iid_seed0.json`) | `scripts/make_split.py`로 만듦 |
 | `configs/dlg.yaml` | DLG 실험: 이미지, σ, 반복 횟수, 시드 | `run_dlg.py --sigmas --iterations --images --dummy-seed` |
 
-결과 파일 설명은 [`scripts/README.md`](../scripts/README.md), 운영 환경 설정 값은 [운영환경.md](운영환경.md)에 있다.
+결과 파일 설명은 [`scripts/README.md`](../scripts/README.md), 운영 환경 설정 값은 [4_운영환경.md](4_운영환경.md)에 있다.
 
 ---
 
