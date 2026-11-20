@@ -11,7 +11,7 @@
 | `run_matrix.py` | 있음 (본 실험 11/20) | 환경 4 × (정상, 공격) × 집계 3 × 시드 일괄 실행, `--dry-run` |
 | `replay_round.py` | 예정 | 저장된 상태에서 특정 라운드부터 조건 하나를 바꿔 재실행 |
 | `run_dlg.py` | 있음 | DLG 복원 실험 (CPU) |
-| `make_figures.py` | 예정 | 평가표·비교 그래프 생성 |
+| `compare_matrix.py` | 있음 | `runs.csv` → 공격 피해·방어 개선·정상 손실 표, 정확도 막대그래프 (`experiments/<prefix>/_tables/`) |
 
 ## 하이퍼파라미터 비교 실행
 ```bash

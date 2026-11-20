@@ -2,7 +2,7 @@
 
 11/24 대표 코드 선정 전까지 쓰는 개인 폴더입니다. 선정되면 레포 루트 `src/fedsec/` 등으로 머지됩니다.
 
-**현재 상태 (11/20):** 명세 1\~4단계 구현과 4단계 본 실험 72회, 5단계 로그 기록 끝. 남은 것은 5단계 비교표 계산 코드·그래프와 라운드 재실행 도구, 6단계 원인 분석입니다.
+**현재 상태 (11/20):** 명세 1\~4단계 구현과 4단계 본 실험 72회, 5단계 로그 기록·비교표·그래프 끝. 남은 것은 5단계 라운드 재실행 도구와 6단계 원인 분석입니다.
 
 ## 명세 단계별 요약
 단계마다 구현 내용과 결과를 짧게 적고, 자세한 내용은 문서로 연결합니다. 문서는 명세 문장을 그대로 제목으로 두고 그 아래에 "구현 내용 / 결과"를 적었습니다.
@@ -38,7 +38,8 @@
   - 성능: `class_acc.csv`(클래스별), `client_acc.csv`(클라이언트별 분포 가중 정확도)
   - 복원 로그: DLG `results.csv`(이미지, σ, 반복 횟수, MSE), 복원 이미지
   - 재실행용: `config.yaml`(설정·시드·분할·악성 ID 등 일정), 5라운드마다 전역 모델 `models/round_XXX.pt`
-- **미수행:** 공격 피해·방어 개선·정상 손실을 계산하는 비교표·그래프 코드, 저장한 모델에서 조건을 바꿔 특정 라운드부터 다시 돌리는 도구
+  - 비교표·그래프: `compare_matrix.py`가 `runs.csv`에서 공격 피해·방어 개선·정상 손실(%p, 시드별 값과 평균)과 정확도 막대그래프를 만듦. 발산한 칸은 값 대신 발산 라운드, 발산 전 모델 기준 값은 참고 표로 따로 (`experiments/matrix/_tables/`)
+- **미수행:** 저장한 모델에서 조건을 바꿔 특정 라운드부터 다시 돌리는 도구
 
 ### 6. 공격·방어 결과의 원인 분석
 - **미수행.** 재실행에 쓸 모델은 저장됨. 후보 사례: DLG dog 이미지(σ 1e-2)의 복원 정체 (노이즈가 아니라 최적화 초반 폭주, [3_DLG-결과.md](docs/3_DLG-결과.md))
@@ -67,7 +68,7 @@ scripts/run_server_experiment.py ── 서버(serve.py)를 띄우고 → 클라
 | `attacks/` | 내부자 협력 공격, DLG |
 | `defenses/` | 노름 클리핑, 좌표별 중앙값 |
 | `environments/` | 악성·지연·참여 일정, 가상 시간, 채택 규칙 |
-| `experiment/` | 설정 읽기, 시드, 평가, 클래스별·클라이언트별 성능, 서버 없는 실행기 |
+| `experiment/` | 설정 읽기, 시드, 평가, 클래스별·클라이언트별 성능, 서버 없는 실행기, 비교표(`comparison.py`)·막대그래프(`bar_chart.py`) |
 | `logger/` | 결과 폴더 기록 (CSV, 설정, 요약) |
 
 방어 함수와 서버는 악성 ID를 받지 않습니다. 악성·지연 ID는 클라이언트 실행 프로그램만 알고, 분석용으로 `config.yaml`에 남깁니다.
@@ -78,7 +79,7 @@ scripts/run_server_experiment.py ── 서버(serve.py)를 띄우고 → 클라
 ```bash
 cd members/이승규
 pip install -e ".[test]"                              # 설치 (torch, torchvision, PyYAML, Flask, requests + pytest)
-python -m pytest -q tests tools/tests                 # 테스트 (361개, 약 7초)
+python -m pytest -q tests tools/tests                 # 테스트 (537개, 약 10초)
 
 # 서버를 거친 실험 1회 (서버를 띄우고 → 클라이언트 10명 실행 → 서버 종료)
 python scripts/run_server_experiment.py --name demo --rounds 3
@@ -87,6 +88,7 @@ python scripts/run_server_experiment.py --name d_atk_med --env configs/env/delay
 # 본 실험 72회 (끊기면 같은 명령으로 이어서)
 python scripts/run_matrix.py --dry-run                # 목록과 상태만
 python scripts/run_matrix.py --seeds 0 1 2
+python scripts/compare_matrix.py                      # 비교표·그래프 → experiments/matrix/_tables/
 
 # DLG (CPU, configs/dlg.yaml 그대로: 이미지 5장 × σ 3개, 약 2분)
 python scripts/run_dlg.py --name demo
@@ -118,7 +120,7 @@ python scripts/run_experiment.py --name baseline
 | 경로 | 내용 |
 |---|---|
 | `src/fedsec/` | 실험 엔진 패키지 (위 "코드 구조") |
-| `scripts/` | 실행 스크립트 (`run_server_experiment.py`, `serve.py`, `run_clients.py`, `run_matrix.py`, `run_dlg.py`, `run_experiment.py`, `make_split.py`) |
+| `scripts/` | 실행 스크립트 (`run_server_experiment.py`, `serve.py`, `run_clients.py`, `run_matrix.py`, `compare_matrix.py`, `run_dlg.py`, `run_experiment.py`, `make_split.py`) |
 | `configs/` | 학습 `base.yaml`, 공격·방어 `attack_defense.yaml`, 환경 `env/`, 레이블 편향 분할 `splits/`, DLG `dlg.yaml` |
 | `tests/` | 집계·공격·방어·환경·서버·DLG·성능 지표 수치 예제 테스트 (`tools/tests/`는 탐색 도구 테스트) |
 | `tools/` | 학습 설정 탐색 `sweep.py`, 비교표 `summarize.py`, 실행 목록 `plans/` |

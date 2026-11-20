@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="672" height="348" viewBox="0 0 672 348" font-family="sans-serif">
+<rect class="background" x="0" y="0" width="672" height="348" fill="white"/>
+<text x="48.0" y="20.0" font-size="14" text-anchor="start" font-weight="bold">최종 테스트 정확도 (시드 3개 평균, %)</text>
+<rect class="legend" x="48" y="34" width="10" height="10" fill="#1f4e79"/>
+<text x="62.0" y="43.0" font-size="11" text-anchor="start">정상 FedAvg</text>
+<rect class="legend" x="152" y="34" width="10" height="10" fill="#4f81bd"/>
+<text x="166.0" y="43.0" font-size="11" text-anchor="start">정상 클리핑</text>
+<rect class="legend" x="256" y="34" width="10" height="10" fill="#9dc3e6"/>
+<text x="270.0" y="43.0" font-size="11" text-anchor="start">정상 중앙값</text>
+<rect class="legend" x="360" y="34" width="10" height="10" fill="#c55a11"/>
+<text x="374.0" y="43.0" font-size="11" text-anchor="start">공격 FedAvg</text>
+<rect class="legend" x="464" y="34" width="10" height="10" fill="#f4a261"/>
+<text x="478.0" y="43.0" font-size="11" text-anchor="start">공격 클리핑</text>
+<rect class="legend" x="568" y="34" width="10" height="10" fill="#f7d08a"/>
+<text x="582.0" y="43.0" font-size="11" text-anchor="start">공격 중앙값</text>
+<line x1="48" y1="312.0" x2="656" y2="312.0" stroke="#d9d9d9" stroke-width="1"/>
+<text x="42.0" y="316.0" font-size="10" text-anchor="end">0</text>
+<line x1="48" y1="264.0" x2="656" y2="264.0" stroke="#d9d9d9" stroke-width="1"/>
+<text x="42.0" y="268.0" font-size="10" text-anchor="end">20</text>
+<line x1="48" y1="216.0" x2="656" y2="216.0" stroke="#d9d9d9" stroke-width="1"/>
+<text x="42.0" y="220.0" font-size="10" text-anchor="end">40</text>
+<line x1="48" y1="168.0" x2="656" y2="168.0" stroke="#d9d9d9" stroke-width="1"/>
+<text x="42.0" y="172.0" font-size="10" text-anchor="end">60</text>
+<line x1="48" y1="120.0" x2="656" y2="120.0" stroke="#d9d9d9" stroke-width="1"/>
+<text x="42.0" y="124.0" font-size="10" text-anchor="end">80</text>
+<line x1="48" y1="72.0" x2="656" y2="72.0" stroke="#d9d9d9" stroke-width="1"/>
+<text x="42.0" y="76.0" font-size="10" text-anchor="end">100</text>
+<text x="110.0" y="332.0" font-size="12" text-anchor="middle">baseline</text>
+<rect class="bar" x="62.0" y="129.1" width="14" height="182.9" fill="#1f4e79"/>
+<rect class="bar" x="78.0" y="129.0" width="14" height="183.0" fill="#4f81bd"/>
+<rect class="bar" x="94.0" y="129.3" width="14" height="182.7" fill="#9dc3e6"/>
+<text x="118.0" y="306.0" font-size="10" text-anchor="start" transform="rotate(-90 118.0 306.0)" fill="#c00000">발산</text>
+<rect class="bar" x="126.0" y="150.1" width="14" height="161.9" fill="#f4a261"/>
+<rect class="bar" x="142.0" y="146.0" width="14" height="166.0" fill="#f7d08a"/>
+<text x="234.0" y="332.0" font-size="12" text-anchor="middle">delay</text>
+<rect class="bar" x="186.0" y="135.6" width="14" height="176.4" fill="#1f4e79"/>
+<rect class="bar" x="202.0" y="135.2" width="14" height="176.8" fill="#4f81bd"/>
+<rect class="bar" x="218.0" y="135.6" width="14" height="176.4" fill="#9dc3e6"/>
+<text x="242.0" y="306.0" font-size="10" text-anchor="start" transform="rotate(-90 242.0 306.0)" fill="#c00000">발산</text>
+<rect class="bar" x="250.0" y="170.6" width="14" height="141.4" fill="#f4a261"/>
+<rect class="bar" x="266.0" y="164.3" width="14" height="147.7" fill="#f7d08a"/>
+<text x="358.0" y="332.0" font-size="12" text-anchor="middle">partial</text>
+<rect class="bar" x="310.0" y="131.0" width="14" height="181.0" fill="#1f4e79"/>
+<rect class="bar" x="326.0" y="131.1" width="14" height="180.9" fill="#4f81bd"/>
+<rect class="bar" x="342.0" y="131.6" width="14" height="180.4" fill="#9dc3e6"/>
+<text x="366.0" y="306.0" font-size="10" text-anchor="start" transform="rotate(-90 366.0 306.0)" fill="#c00000">발산</text>
+<rect class="bar" x="374.0" y="153.9" width="14" height="158.1" fill="#f4a261"/>
+<rect class="bar" x="390.0" y="151.9" width="14" height="160.1" fill="#f7d08a"/>
+<text x="482.0" y="332.0" font-size="12" text-anchor="middle">label_skew</text>
+<rect class="bar" x="434.0" y="134.0" width="14" height="178.0" fill="#1f4e79"/>
+<rect class="bar" x="450.0" y="134.0" width="14" height="178.0" fill="#4f81bd"/>
+<rect class="bar" x="466.0" y="135.3" width="14" height="176.7" fill="#9dc3e6"/>
+<text x="490.0" y="306.0" font-size="10" text-anchor="start" transform="rotate(-90 490.0 306.0)" fill="#c00000">발산</text>
+<rect class="bar" x="498.0" y="168.8" width="14" height="143.2" fill="#f4a261"/>
+<rect class="bar" x="514.0" y="166.2" width="14" height="145.8" fill="#f7d08a"/>
+</svg>
