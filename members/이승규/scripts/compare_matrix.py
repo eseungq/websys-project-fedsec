@@ -55,6 +55,10 @@ def read_runs(path: Path) -> list[dict]:
         raise ValueError(f"runs.csv를 읽지 못했습니다 ({path}): {error}") from error
     if not rows:
         raise ValueError(f"runs.csv에 실행이 없습니다: {path}")
+    # csv.DictReader는 모자란 열에 None을, 남는 값은 None 키에 넣는다 (잘리거나 깨진 행)
+    broken = [line for line, row in enumerate(rows, start=2) if None in row or None in row.values()]
+    if broken:
+        raise ValueError(f"runs.csv의 열 수가 머리줄과 다른 행이 있습니다 (잘리거나 깨진 파일): {path} {broken[:5]}행")
     return rows
 
 

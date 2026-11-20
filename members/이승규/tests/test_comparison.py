@@ -218,3 +218,16 @@ def test_parse_runs_rejects_diverged_status_other_than_first_round_without_accur
 
     with pytest.raises(ValueError, match="diverged 상태"):
         _parse([row])
+
+
+def test_parse_runs_rejects_first_round_divergence_recorded_as_done():
+    # 1라운드 발산은 평가할 모델이 없으므로 정확도가 있는 done 행은 잘못된 기록
+    with pytest.raises(ValueError, match="1라운드 발산"):
+        _parse([_row(attack="attack", acc="0.10", diverged="1")])
+
+
+def test_parse_runs_rejects_diverged_row_with_validation_accuracy():
+    row = {**_row(attack="attack", status="diverged", acc="", diverged="1"), "final_val_acc": "0.10"}
+
+    with pytest.raises(ValueError, match="diverged 상태"):
+        _parse([row])

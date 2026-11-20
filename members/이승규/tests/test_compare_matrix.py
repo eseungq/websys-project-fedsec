@@ -98,3 +98,16 @@ def test_build_outputs_rejects_duplicate_env_or_seed(envs, seeds):
     # 시드 0이 두 번 들어가면 평균이 바뀐다 (run_matrix.py처럼 거부)
     with pytest.raises(ValueError, match="겹치지 않는"):
         build_outputs(_rows(), envs, seeds, ROUNDS)
+
+
+@pytest.mark.parametrize("change", ["cut", "extra"])
+def test_read_runs_rejects_row_with_wrong_column_count(tmp_path, change):
+    # 비교에 쓰지 않는 뒤쪽 열만 잘려도(또는 열이 남아도) 깨진 파일로 본다
+    rows = [{**row, "dirty": "False"} for row in _rows()]
+    path = _write_runs(tmp_path / "runs.csv", rows)
+    text = path.read_text(encoding="utf-8").rstrip("\n")
+    text = text[: text.rfind(",")] if change == "cut" else text + ",extra"
+    path.write_text(text + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="열 수"):
+        read_runs(path)

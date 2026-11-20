@@ -86,12 +86,16 @@ def _parse_result(row: dict, rounds: int) -> RunResult:
         raise ValueError(f"끝나지 않은 실행입니다 ({status or '상태 없음'}): {name} → run_matrix.py로 마저 실행")
     diverged = _diverged_round(row)
     _check_rounds(row, diverged, rounds)
+    # run_matrix.py는 1라운드 집계 직후 발산(평가할 모델 없음)만 diverged로 두고 정확도를 비운다.
+    # 발산 전 모델로 평가한 실행(2라운드 이후 발산)은 done
+    accuracies = {key: _field(row, key) for key in ("final_val_acc", "final_test_acc")}
     if status == "diverged":
-        # run_matrix.py는 1라운드 집계 직후 발산(평가할 모델 없음)만 diverged로 둔다. 발산 전 모델로 평가한 실행은 done
-        if diverged != 1 or _field(row, "final_test_acc"):
-            raise ValueError(f"diverged 상태는 1라운드 발산이고 정확도가 비어 있어야 합니다: {name} "
-                             f"(발산 라운드 {diverged}, 정확도 {_field(row, 'final_test_acc')!r})")
+        if diverged != 1 or any(accuracies.values()):
+            raise ValueError(f"diverged 상태는 1라운드 발산이고 검증·테스트 정확도가 비어 있어야 합니다: {name} "
+                             f"(발산 라운드 {diverged}, 정확도 {accuracies})")
         return RunResult(None, diverged)
+    if diverged == 1:
+        raise ValueError(f"1라운드 발산은 평가할 모델이 없으므로 diverged 상태여야 합니다: {name} (상태 done)")
     return RunResult(_accuracy(row), diverged)
 
 
