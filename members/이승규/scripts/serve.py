@@ -24,6 +24,12 @@ from fedsec.server.state import ServerState, initial_global_state
 MEMBER_ROOT = Path(__file__).resolve().parents[1]
 
 
+def shown_path(path: str) -> str:
+    """기록용 경로: members/이승규/ 안이면 상대 경로로 (절대 경로의 PC 사용자 이름이 결과 파일에 남지 않게)."""
+    resolved = (MEMBER_ROOT / path).resolve()
+    return resolved.relative_to(MEMBER_ROOT).as_posix() if resolved.is_relative_to(MEMBER_ROOT) else path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default="configs/base.yaml", help="members/이승규/ 기준 상대 경로 또는 절대 경로")
@@ -45,8 +51,8 @@ def main() -> None:
     log = ServerLog(inside(EXPERIMENTS_DIR, str((MEMBER_ROOT / args.log_dir).resolve()))) if args.log_dir else None
     defense = {key: value for key, value in attack_defense.to_dict().items() if not key.startswith("attack")}
     state = ServerState(initial_global_state(cfg.seed, cfg.model), num_clients=args.num_clients, policy=policy, log=log,
-                        config={"seed": cfg.seed, "model": cfg.model, "config_file": args.config,
-                                "env": env.name, "env_file": args.env, "per_round": env.per_round,
+                        config={"seed": cfg.seed, "model": cfg.model, "config_file": shown_path(args.config),
+                                "env": env.name, "env_file": shown_path(args.env), "per_round": env.per_round,
                                 "deadline": env.timing.deadline, **defense})
     print(f"server http://{HOST}:{args.port} seed={cfg.seed} model={cfg.model} clients={args.num_clients} "
           f"env={env.name} per_round={env.per_round} deadline={env.timing.deadline} "
