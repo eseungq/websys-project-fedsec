@@ -52,22 +52,40 @@ def difference(minuend: RunResult, subtrahend: RunResult) -> Difference:
     return Difference(None if rounds else reference, reference, rounds)
 
 
-def parse_runs(rows: Iterable[dict]) -> dict[Key, RunResult]:
-    """runs.csv 행 → 실행별 결과. 끝나지 않았거나 값이 잘못된 실행, 중복 실행이 있으면 ValueError."""
+def parse_runs(rows: Iterable[dict], rounds: int) -> dict[Key, RunResult]:
+    """runs.csv 행 → 실행별 결과. rounds는 목표 라운드 수 (본 실험은 base.yaml의 40).
+
+    끝나지 않았거나 값이 잘못된 실행, 목표와 다른 라운드 수, 중복 실행이 있으면 ValueError.
+    """
     rows = list(rows)
-    keys = [(row["env"], row["attack"], row["aggregator"], int(row["seed"])) for row in rows]
+    keys = [(_field(row, "env"), _field(row, "attack"), _field(row, "aggregator"), _whole(row, "seed"))
+            for row in rows]
     counts = Counter(keys)
-    duplicates = sorted(row["name"] for row, key in zip(rows, keys) if counts[key] > 1)
+    duplicates = sorted(_field(row, "name") for row, key in zip(rows, keys) if counts[key] > 1)
     if duplicates:
         raise ValueError(f"runs.csv에 중복된 실행이 있습니다: {duplicates}")
-    return {key: _parse_result(row) for key, row in zip(keys, rows)}
+    return {key: _parse_result(row, rounds) for key, row in zip(keys, rows)}
 
 
-def _parse_result(row: dict) -> RunResult:
-    name, status = row["name"], row["status"]
+def _field(row: dict, key: str) -> str:
+    """빈 칸과, 잘린 행에서 csv.DictReader가 넣는 None을 모두 ""로."""
+    return (row.get(key) or "").strip()
+
+
+def _whole(row: dict, key: str) -> int:
+    text = _field(row, key)
+    try:
+        return int(text)
+    except ValueError:
+        raise ValueError(f"{key}가 정수가 아닙니다: {_field(row, 'name')} ({text!r})") from None
+
+
+def _parse_result(row: dict, rounds: int) -> RunResult:
+    name, status = _field(row, "name"), _field(row, "status")
     if status not in FINISHED:
-        raise ValueError(f"끝나지 않은 실행입니다 ({status}): {name} → run_matrix.py로 마저 실행")
+        raise ValueError(f"끝나지 않은 실행입니다 ({status or '상태 없음'}): {name} → run_matrix.py로 마저 실행")
     diverged = _diverged_round(row)
+    _check_rounds(row, diverged, rounds)
     if status == "diverged":
         if diverged is None:
             raise ValueError(f"diverged 상태인데 발산 라운드가 없습니다: {name}")
@@ -75,8 +93,21 @@ def _parse_result(row: dict) -> RunResult:
     return RunResult(_accuracy(row), diverged)
 
 
+def _check_rounds(row: dict, diverged: int | None, rounds: int) -> None:
+    """run_matrix.diverged_problems와 같은 기준: 발산은 공격 실험만, 1~목표 라운드, 완료 라운드 = 발산 − 1."""
+    name, completed = _field(row, "name"), _whole(row, "rounds_completed")
+    if diverged is None:
+        if completed != rounds:
+            raise ValueError(f"완료 라운드 {completed}가 목표 {rounds}라운드와 다릅니다: {name}")
+        return
+    if _field(row, "attack") != "attack":
+        raise ValueError(f"정상 실행이 발산했습니다 (설정 문제로 보고 비교하지 않음): {name}")
+    if not 1 <= diverged <= rounds or completed != diverged - 1:
+        raise ValueError(f"발산 라운드 {diverged}와 완료 라운드 {completed}가 목표 {rounds}라운드와 맞지 않습니다: {name}")
+
+
 def _diverged_round(row: dict) -> int | None:
-    text = row.get("diverged_round", "").strip()
+    text = _field(row, "diverged_round")
     if not text:
         return None
     try:
@@ -84,17 +115,18 @@ def _diverged_round(row: dict) -> int | None:
     except ValueError:
         value = 0
     if value < 1:
-        raise ValueError(f"발산 라운드는 1 이상의 정수여야 합니다: {row['name']} ({text!r})")
+        raise ValueError(f"발산 라운드는 1 이상의 정수여야 합니다: {_field(row, 'name')} ({text!r})")
     return value
 
 
 def _accuracy(row: dict) -> float:
+    text = _field(row, "final_test_acc")
     try:
-        value = float(row["final_test_acc"])
+        value = float(text)
     except ValueError:
         value = math.nan
     if not (math.isfinite(value) and 0 <= value <= 1):
-        raise ValueError(f"최종 테스트 정확도가 0~1 사이 숫자가 아닙니다: {row['name']} ({row['final_test_acc']!r})")
+        raise ValueError(f"최종 테스트 정확도가 0~1 사이 숫자가 아닙니다: {_field(row, 'name')} ({text!r})")
     return value
 
 

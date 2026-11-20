@@ -17,9 +17,20 @@ from fedsec.experiment.comparison import (
 CONDITIONS = [(attack, agg) for attack in ("normal", "attack") for agg in ("fedavg", "clip_fedavg", "median")]
 
 
-def _row(env="baseline", attack="normal", aggregator="fedavg", seed=0, acc="0.76", status="done", diverged=""):
+ROUNDS = 40
+
+
+def _row(env="baseline", attack="normal", aggregator="fedavg", seed=0, acc="0.76", status="done", diverged="",
+         completed=None):
+    if completed is None:
+        completed = int(diverged) - 1 if diverged else ROUNDS
     return {"name": f"{env}-{attack}-{aggregator}-s{seed}", "env": env, "attack": attack, "aggregator": aggregator,
-            "seed": str(seed), "status": status, "final_test_acc": acc, "diverged_round": diverged}
+            "seed": str(seed), "status": status, "final_test_acc": acc, "diverged_round": diverged,
+            "rounds_completed": str(completed)}
+
+
+def _parse(rows):
+    return parse_runs(rows, rounds=ROUNDS)
 
 
 def _rows(accs: dict, env="baseline", seeds=(0,), diverged: dict | None = None) -> list[dict]:
@@ -39,7 +50,7 @@ def _metric(rows, metric, defense=""):
 
 def test_compare_follows_spec_definitions_in_percentage_points():
     # Arrange
-    results = parse_runs(_rows(ACCS))
+    results = _parse(_rows(ACCS))
 
     # Act
     rows = compare(results, envs=["baseline"], seeds=[0])
@@ -55,7 +66,7 @@ def test_compare_follows_spec_definitions_in_percentage_points():
 def test_compare_keeps_seed_values_separate():
     rows = _rows(ACCS, seeds=(0,)) + _rows({**ACCS, ("normal", "fedavg"): 0.80}, seeds=(1,))
 
-    damage = _metric(compare(parse_runs(rows), envs=["baseline"], seeds=[0, 1]), "attack_damage")
+    damage = _metric(compare(_parse(rows), envs=["baseline"], seeds=[0, 1]), "attack_damage")
 
     assert [r["seed"] for r in damage] == [0, 1]
     assert [r["value"] for r in damage] == pytest.approx([46.0, 50.0])
@@ -65,7 +76,7 @@ def test_diverged_run_has_no_main_value_but_keeps_reference():
     # 발산 전 모델(예: 12라운드)과 40라운드 모델의 차이는 학습 길이 차이도 섞여 주 표에 넣지 않는다
     rows = _rows(ACCS, diverged={("attack", "fedavg"): 13})
 
-    result = compare(parse_runs(rows), envs=["baseline"], seeds=[0])
+    result = compare(_parse(rows), envs=["baseline"], seeds=[0])
 
     damage = _metric(result, "attack_damage")[0]
     assert damage["value"] is None
@@ -78,7 +89,7 @@ def test_first_round_divergence_has_no_reference():
     rows = [r for r in _rows(ACCS) if (r["attack"], r["aggregator"]) != ("attack", "fedavg")]
     rows.append(_row(attack="attack", aggregator="fedavg", acc="", status="diverged", diverged="1"))
 
-    damage = _metric(compare(parse_runs(rows), envs=["baseline"], seeds=[0]), "attack_damage")[0]
+    damage = _metric(compare(_parse(rows), envs=["baseline"], seeds=[0]), "attack_damage")[0]
 
     assert damage["value"] is None and damage["reference"] is None
     assert damage["diverged_rounds"] == (1,)
@@ -91,31 +102,31 @@ def test_difference_of_two_finished_runs():
 @pytest.mark.parametrize("status", ["todo", "incomplete", "stale"])
 def test_parse_runs_rejects_unfinished_runs(status):
     with pytest.raises(ValueError, match="끝나지 않은 실행"):
-        parse_runs([_row(status=status)])
+        _parse([_row(status=status)])
 
 
 @pytest.mark.parametrize("acc", ["", "abc", "1.5", "-0.1", "nan"])
 def test_parse_runs_rejects_bad_accuracy_of_done_run(acc):
     with pytest.raises(ValueError, match="정확도"):
-        parse_runs([_row(acc=acc)])
+        _parse([_row(acc=acc)])
 
 
 @pytest.mark.parametrize("diverged", ["abc", "0", "-3"])
 def test_parse_runs_rejects_bad_diverged_round(diverged):
     with pytest.raises(ValueError, match="발산 라운드"):
-        parse_runs([_row(diverged=diverged)])
+        _parse([_row(attack="attack", diverged=diverged, completed=ROUNDS)])
 
 
 def test_parse_runs_rejects_duplicate_run():
     with pytest.raises(ValueError, match="중복"):
-        parse_runs([_row(), _row()])
+        _parse([_row(), _row()])
 
 
 def test_compare_names_missing_run():
     rows = [r for r in _rows(ACCS) if (r["attack"], r["aggregator"]) != ("attack", "median")]
 
     with pytest.raises(ValueError, match="baseline-attack-median-s0"):
-        compare(parse_runs(rows), envs=["baseline"], seeds=[0])
+        compare(_parse(rows), envs=["baseline"], seeds=[0])
 
 
 def test_format_cell_shows_seed_values_and_mean():
@@ -142,14 +153,14 @@ def test_format_cell_without_mean_when_some_seed_diverged():
 def test_accuracy_table_shows_percent_and_divergence():
     rows = _rows(ACCS, diverged={("attack", "fedavg"): 13})
 
-    table = accuracy_table(parse_runs(rows), envs=["baseline"], seeds=[0])
+    table = accuracy_table(_parse(rows), envs=["baseline"], seeds=[0])
 
     assert "| baseline | 76.00 (76.00) |" in table
     assert "발산 (13라운드)" in table
 
 
 def test_markdown_has_main_and_reference_tables():
-    rows = compare(parse_runs(_rows(ACCS, diverged={("attack", "fedavg"): 13})), envs=["baseline"], seeds=[0])
+    rows = compare(_parse(_rows(ACCS, diverged={("attack", "fedavg"): 13})), envs=["baseline"], seeds=[0])
 
     text = to_markdown(rows, envs=["baseline"])
 
@@ -159,16 +170,42 @@ def test_markdown_has_main_and_reference_tables():
 
 
 def test_markdown_omits_reference_table_without_divergence():
-    text = to_markdown(compare(parse_runs(_rows(ACCS)), envs=["baseline"], seeds=[0]), envs=["baseline"])
+    text = to_markdown(compare(_parse(_rows(ACCS)), envs=["baseline"], seeds=[0]), envs=["baseline"])
 
     assert "참고" not in text
 
 
 def test_csv_has_one_line_per_metric_and_seed():
-    rows = compare(parse_runs(_rows(ACCS, diverged={("attack", "fedavg"): 13})), envs=["baseline"], seeds=[0])
+    rows = compare(_parse(_rows(ACCS, diverged={("attack", "fedavg"): 13})), envs=["baseline"], seeds=[0])
 
     lines = to_csv(rows).splitlines()
 
     assert lines[0] == "env,metric,defense,seed,value_pp,reference_pp,diverged_rounds"
     assert len(lines) == 1 + 5   # 공격 피해 1 + 방어 개선 2 + 정상 손실 2
     assert "baseline,attack_damage,,0,,46.0,13" in lines
+
+
+def test_parse_runs_rejects_run_with_other_round_count():
+    # 2라운드 동작 확인 결과가 40라운드 본 실험 표에 섞이지 않게
+    with pytest.raises(ValueError, match="라운드"):
+        _parse([_row(completed=2)])
+
+
+@pytest.mark.parametrize("diverged, completed", [("41", 40), ("13", 5)])
+def test_parse_runs_rejects_inconsistent_divergence(diverged, completed):
+    # 발산 라운드는 1~목표 라운드, 완료 라운드는 발산 라운드 − 1
+    with pytest.raises(ValueError, match="라운드"):
+        _parse([_row(attack="attack", acc="0.1", diverged=diverged, completed=completed)])
+
+
+def test_parse_runs_rejects_divergence_of_normal_run():
+    with pytest.raises(ValueError, match="정상 실행"):
+        _parse([_row(acc="0.1", diverged="13")])
+
+
+def test_parse_runs_reports_truncated_row_as_value_error():
+    # 마지막 행이 잘리면 csv.DictReader가 빠진 열에 None을 넣는다
+    row = {**_row(), "diverged_round": None, "rounds_completed": None}
+
+    with pytest.raises(ValueError):
+        _parse([row])
