@@ -17,7 +17,15 @@ import sys
 from pathlib import Path
 
 from run_clients import EXPERIMENTS_DIR, MEMBER_ROOT, inside
-from run_matrix import DEFAULT_PREFIX, DEFAULT_SEEDS, ENVS, positive_int
+from run_matrix import (
+    AGGREGATORS,
+    ATTACKS,
+    DEFAULT_PREFIX,
+    DEFAULT_SEEDS,
+    ENVS,
+    plan_runs,
+    positive_int,
+)
 
 from fedsec.experiment.bar_chart import grouped_bar_svg
 from fedsec.experiment.comparison import (
@@ -72,6 +80,7 @@ def accuracy_chart(results: dict[Key, RunResult], envs: list[str], seeds: list[i
 
 def build_outputs(rows: list[dict], envs: list[str], seeds: list[int], rounds: int) -> dict[str, str]:
     """파일 이름 → 내용. 예정과 다른 실행·끝나지 않은 실행·잘못된 값이 있으면 ValueError."""
+    plan_runs(envs, ATTACKS, AGGREGATORS, seeds)   # 겹치거나 모르는 환경·시드는 run_matrix.py와 같은 기준으로 거부
     results = parse_runs(rows, rounds)
     check_plan(results, envs, seeds)
     comparison = compare(results, envs, seeds)   # 빠진 조합은 여기서 ValueError (그래프보다 먼저)

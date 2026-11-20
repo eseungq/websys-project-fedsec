@@ -91,3 +91,10 @@ def test_truncated_last_row_is_value_error(tmp_path):
 
     with pytest.raises(ValueError):
         build_outputs(read_runs(path), ENVS, SEEDS, ROUNDS)
+
+
+@pytest.mark.parametrize("envs, seeds", [(["baseline", "baseline", "delay"], SEEDS), (ENVS, [0, 0, 1])])
+def test_build_outputs_rejects_duplicate_env_or_seed(envs, seeds):
+    # 시드 0이 두 번 들어가면 평균이 바뀐다 (run_matrix.py처럼 거부)
+    with pytest.raises(ValueError, match="겹치지 않는"):
+        build_outputs(_rows(), envs, seeds, ROUNDS)
