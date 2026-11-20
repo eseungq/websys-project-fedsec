@@ -8,3 +8,4 @@
 - 내부자 공격 벡터 (악성 0명 / 1명 / 2명)
 - 채택 수 0개(N/A), 3개 미만(갱신 안 함) 처리
 - 클래스별 정확도, 클라이언트별 분포 가중 정확도 (`test_metrics.py`)
+- 공격 피해·방어 개선·정상 손실(%p), 발산한 칸과 참고값, 잘못된 runs.csv 거부 (`test_comparison.py`, `test_compare_matrix.py`)
