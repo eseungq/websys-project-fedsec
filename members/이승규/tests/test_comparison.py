@@ -209,3 +209,12 @@ def test_parse_runs_reports_truncated_row_as_value_error():
 
     with pytest.raises(ValueError):
         _parse([row])
+
+
+@pytest.mark.parametrize("diverged, completed, acc", [("13", 12, "0.10"), ("1", 0, "0.10"), ("13", 12, "")])
+def test_parse_runs_rejects_diverged_status_other_than_first_round_without_accuracy(diverged, completed, acc):
+    # diverged 상태는 1라운드 발산(평가할 모델 없음)만. 발산 전 모델로 평가한 실행은 done + diverged_round
+    row = _row(attack="attack", status="diverged", acc=acc, diverged=diverged, completed=completed)
+
+    with pytest.raises(ValueError, match="diverged 상태"):
+        _parse([row])

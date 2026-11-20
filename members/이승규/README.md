@@ -79,7 +79,7 @@ scripts/run_server_experiment.py ── 서버(serve.py)를 띄우고 → 클라
 ```bash
 cd members/이승규
 pip install -e ".[test]"                              # 설치 (torch, torchvision, PyYAML, Flask, requests + pytest)
-python -m pytest -q tests tools/tests                 # 테스트 (537개, 약 10초)
+python -m pytest -q tests tools/tests                 # 테스트 (550개, 약 10초)
 
 # 서버를 거친 실험 1회 (서버를 띄우고 → 클라이언트 10명 실행 → 서버 종료)
 python scripts/run_server_experiment.py --name demo --rounds 3
