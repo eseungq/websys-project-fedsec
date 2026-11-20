@@ -8,7 +8,7 @@
 | `run_experiment.py` | 있음 | 서버 없이 정상 FedAvg 1회 실행 (학습 설정 탐색용) |
 | `serve.py`, `run_clients.py` | 있음 | Flask 서버, 가상 클라이언트 실행 프로그램을 따로 실행 |
 | `run_server_experiment.py` | 있음 | 서버를 띄우고 클라이언트를 실행한 뒤 서버 종료 (환경·공격·방어 선택) |
-| `run_matrix.py` | 있음 (본 실험은 아직 안 돌림) | 환경 4 × (정상, 공격) × 집계 3 × 시드 일괄 실행, `--dry-run` |
+| `run_matrix.py` | 있음 (본 실험 11/20) | 환경 4 × (정상, 공격) × 집계 3 × 시드 일괄 실행, `--dry-run` |
 | `replay_round.py` | 예정 | 저장된 상태에서 특정 라운드부터 조건 하나를 바꿔 재실행 |
 | `run_dlg.py` | 있음 | DLG 복원 실험 (CPU) |
 | `make_figures.py` | 예정 | 평가표·비교 그래프 생성 |
