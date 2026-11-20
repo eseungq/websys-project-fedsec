@@ -1,0 +1,11 @@
+experiment,round,train_loss,val_loss,val_acc,norm_min,norm_mean,norm_max,num_selected,num_accepted,num_late,malicious_selected,malicious_accepted,overall_malicious_ratio,accepted_malicious_ratio,model_updated,skip_reason,num_excluded,attack_applied,updated,aggregator,aggregate_norm,virtual_elapsed,train_sec,comm_sec,total_sec
+matrix/baseline-attack-fedavg-s1,1,2.1598,2.3095,0.107,1.6781,1.7314,1.7732,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.7117,1.0,3.758,0.155,4.018
+matrix/baseline-attack-fedavg-s1,2,2.1507,2.3136,0.105,1.7131,1.7515,1.7926,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.6574,1.0,3.677,0.148,3.924
+matrix/baseline-attack-fedavg-s1,3,2.2044,2.3216,0.105,1.5697,1.6064,1.6698,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.5974,1.0,3.645,0.151,3.887
+matrix/baseline-attack-fedavg-s1,4,2.2263,2.3377,0.1118,1.3912,1.5056,1.6076,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.603,1.0,3.635,0.153,3.884
+matrix/baseline-attack-fedavg-s1,5,2.1724,2.3837,0.105,1.7316,1.7781,1.8401,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.6023,1.0,3.646,0.15,3.888
+matrix/baseline-attack-fedavg-s1,6,2.262,2.5405,0.105,1.1192,1.3433,1.5506,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.5081,1.0,3.652,0.151,3.892
+matrix/baseline-attack-fedavg-s1,7,2.1904,3.2851,0.105,1.7109,1.7653,1.83,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.5966,1.0,3.636,0.148,3.874
+matrix/baseline-attack-fedavg-s1,8,2.3195,8.0979,0.105,1.4201,1.6169,1.7547,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.4093,1.0,3.63,0.15,3.87
+matrix/baseline-attack-fedavg-s1,9,2.3619,91.3514,0.105,3.4289,3.8237,3.9603,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,0.9917,1.0,3.629,0.149,3.868
+matrix/baseline-attack-fedavg-s1,10,2.9131,4366.7784,0.105,18.5775,20.6066,23.0255,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,3.2026,1.0,3.643,0.15,3.882

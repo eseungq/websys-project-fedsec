@@ -18,9 +18,9 @@ server:
     aggregator: fedavg
     clip_before_median: false
     clip_norm: 3.5
-    config_file: /Users/e_seung.q/Desktop/웹기반 프로젝트/websys-project-fedsec/members/이승규/configs/base.yaml
+    config_file: configs/base.yaml
     env: label_skew
-    env_file: /Users/e_seung.q/Desktop/웹기반 프로젝트/websys-project-fedsec/members/이승규/configs/env/label_skew.yaml
+    env_file: configs/env/label_skew.yaml
     model: simple_cnn
     per_round: null
     seed: 0

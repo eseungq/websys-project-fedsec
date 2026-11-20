@@ -1,0 +1,4 @@
+experiment,round,train_loss,val_loss,val_acc,norm_min,norm_mean,norm_max,num_selected,num_accepted,num_late,malicious_selected,malicious_accepted,overall_malicious_ratio,accepted_malicious_ratio,model_updated,skip_reason,num_excluded,attack_applied,updated,aggregator,aggregate_norm,virtual_elapsed,train_sec,comm_sec,total_sec
+matrix/label_skew-attack-fedavg-s1,1,1.6819,2.4967,0.0954,1.8353,2.0728,2.3376,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,1.5033,1.0,3.754,0.16,4.029
+matrix/label_skew-attack-fedavg-s1,2,1.5551,15.3049,0.0954,2.1131,2.4171,2.6527,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,1.919,1.0,3.738,0.151,3.978
+matrix/label_skew-attack-fedavg-s1,3,1.8604,3685.9448,0.0954,5.627,7.1506,8.7359,10,10,0,2,2,0.2,0.2,True,,0,True,True,fedavg,4.12,1.0,3.638,0.15,3.878

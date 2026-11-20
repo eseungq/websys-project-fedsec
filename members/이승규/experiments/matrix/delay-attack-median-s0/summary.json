@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.6278,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 60.0,
+  "first_round_sec": 4.049,
+  "mean_round_sec_after_first": 3.901,
+  "mean_comm_sec": 0.137,
+  "total_sec": 156.2,
+  "runner": "server",
+  "experiment": "matrix/delay-attack-median-s0",
+  "env": "delay",
+  "attack": true,
+  "seed": 0,
+  "aggregator": "median",
+  "diverged_round": null,
+  "rounds_completed": 40,
+  "final_test_acc": 0.628,
+  "final_test_loss": 3.0069
+}

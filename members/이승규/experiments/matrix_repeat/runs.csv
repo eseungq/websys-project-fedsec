@@ -1,0 +1,2 @@
+name,env,attack,aggregator,seed,status,final_val_acc,final_test_acc,diverged_round,rounds_completed,rounds_not_updated,total_virtual_time,total_sec,device,gpu,torch,commit,dirty
+baseline-normal-fedavg-s0,baseline,normal,fedavg,0,done,0.7638,0.7616,,40,0,40.0,155.7,mps,,2.15.0,67cb9cc307689a8698a65b327617d6f4fbb3b901,False
