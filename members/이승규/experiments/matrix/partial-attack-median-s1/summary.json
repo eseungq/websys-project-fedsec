@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.7246,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 40.0,
+  "first_round_sec": 2.111,
+  "mean_round_sec_after_first": 1.989,
+  "mean_comm_sec": 0.085,
+  "total_sec": 79.7,
+  "runner": "server",
+  "experiment": "matrix/partial-attack-median-s1",
+  "env": "partial",
+  "attack": true,
+  "seed": 1,
+  "aggregator": "median",
+  "diverged_round": null,
+  "rounds_completed": 40,
+  "final_test_acc": 0.7042,
+  "final_test_loss": 1.0261
+}

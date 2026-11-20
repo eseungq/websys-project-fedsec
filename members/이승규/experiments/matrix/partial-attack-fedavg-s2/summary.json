@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.1028,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 12.0,
+  "first_round_sec": 2.183,
+  "mean_round_sec_after_first": 2.009,
+  "mean_comm_sec": 0.08,
+  "total_sec": 24.3,
+  "runner": "server",
+  "experiment": "matrix/partial-attack-fedavg-s2",
+  "env": "partial",
+  "attack": true,
+  "seed": 2,
+  "aggregator": "fedavg",
+  "diverged_round": 13,
+  "rounds_completed": 12,
+  "final_test_acc": 0.1,
+  "final_test_loss": 2632939.3152
+}

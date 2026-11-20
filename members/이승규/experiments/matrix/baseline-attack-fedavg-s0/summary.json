@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.0992,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 12.0,
+  "first_round_sec": 4.216,
+  "mean_round_sec_after_first": 3.896,
+  "mean_comm_sec": 0.149,
+  "total_sec": 47.1,
+  "runner": "server",
+  "experiment": "matrix/baseline-attack-fedavg-s0",
+  "env": "baseline",
+  "attack": true,
+  "seed": 0,
+  "aggregator": "fedavg",
+  "diverged_round": 13,
+  "rounds_completed": 12,
+  "final_test_acc": 0.1,
+  "final_test_loss": 91976590.9504
+}

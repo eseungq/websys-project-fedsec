@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.69,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 40.0,
+  "first_round_sec": 4.065,
+  "mean_round_sec_after_first": 3.914,
+  "mean_comm_sec": 0.159,
+  "total_sec": 156.7,
+  "runner": "server",
+  "experiment": "matrix/baseline-attack-median-s0",
+  "env": "baseline",
+  "attack": true,
+  "seed": 0,
+  "aggregator": "median",
+  "diverged_round": null,
+  "rounds_completed": 40,
+  "final_test_acc": 0.6914,
+  "final_test_loss": 1.1698
+}
