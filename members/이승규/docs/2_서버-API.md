@@ -138,3 +138,21 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 - **서버 없는 실행기와 비교:** 같은 설정·시드로 3라운드를 돌려 최종 모델 가중치가 비트 단위로 같았다. 서버를 거치는 비용은 라운드당 약 0.5초(직렬화 + HTTP)
 - **테스트:** `tests/test_server.py`(API·제외 사유·집계), `tests/test_serialization.py`(가중치 변환·크기 상한·악성 파일 거부), `tests/test_client_round.py`(서버와 클라이언트를 Flask 테스트 클라이언트로 끝까지 돌림)
 - **안전:** 서버는 `127.0.0.1`에서만 받고, `/aggregate`가 실패하면 서버 상태(라운드·모델·대기 업데이트)를 바꾸지 않는다. 가중치는 `torch.load(weights_only=True)`로만 풀어 텐서 외 객체를 거부한다
+
+---
+
+## 공개 코드 출처와 달라진 점
+
+- 출처: McMahan et al., "Communication-Efficient Learning of Deep Networks from Decentralized Data", AISTATS 2017. 명세의 "FedAvg 공개 구현" https://github.com/AshwinRJ/Federated-Learning-PyTorch (`src/federated_main.py`, `src/utils.py`의 `average_weights`, `src/update.py`의 `LocalUpdate`)
+- 코드를 가져오지 않고 같은 흐름(전역 모델 배포 → 로컬 학습 → 서버 평균)을 명세에 맞춰 새로 작성했다: `src/fedsec/aggregation/fedavg.py`, `src/fedsec/client/local_train.py`
+
+| 항목 | 원 코드 | 이 구현 |
+|---|---|---|
+| 평균 대상 | 로컬 학습 후 가중치 자체 | 업데이트 = 로컬 학습 후 가중치 − 시작 전역 가중치 (명세 2단계) |
+| 평균 방식 | 클라이언트 수로 나눈 단순 평균 | 채택된 업데이트만 표본 수에 비례해 가중 평균한 뒤 전역 가중치에 더함 |
+| 통신 | 한 프로세스 안에서 가중치를 직접 주고받음 | Flask REST API (`GET /model`, `POST /update`, `POST /aggregate`), 제출 검증과 제외 사유 기록 |
+| 데이터 분할 | 클라이언트 데이터를 학습 80%·검증 10%·테스트 10%로 다시 나눔 | 팀 공용 분할 파일. 클라이언트 데이터는 모두 학습용, 검증 5,000장은 따로, 공식 테스트는 최종 평가에만 |
+| 참여자 선택 | 라운드마다 `frac` 비율을 무작위 선택 | 환경 설정으로 정함 (기준 전원, 부분 참여 5명을 시드로 고정한 일정) |
+| 로컬 최적화 | SGD momentum 0.5 또는 Adam weight_decay 1e-4 | SGD momentum 0.9, weight_decay 5e-4 (`docs/1_학습설정-결과.md`) |
+| 모델 | `CNNCifar` 등 | `simple_cnn` (합성곱 3층 + 완전연결 2층, BatchNorm 없음) |
+| 방어·공격 | 없음 | 노름 클리핑·좌표별 중앙값 집계, 내부자 협력 공격 (`docs/3_공격-방어.md`) |
