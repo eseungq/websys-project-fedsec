@@ -1,0 +1,26 @@
+[
+  {
+    "condition": "노이즈 없음 (None)",
+    "noise_std": 0.0,
+    "target_index": 25,
+    "true_class": "bird",
+    "reconstructed_class": "bird",
+    "mse": 2e-06
+  },
+  {
+    "condition": "노이즈 작음 (Small)",
+    "noise_std": 0.001,
+    "target_index": 25,
+    "true_class": "bird",
+    "reconstructed_class": "bird",
+    "mse": 0.00051
+  },
+  {
+    "condition": "노이즈 큼 (Large)",
+    "noise_std": 0.01,
+    "target_index": 25,
+    "true_class": "bird",
+    "reconstructed_class": "bird",
+    "mse": 0.042328
+  }
+]

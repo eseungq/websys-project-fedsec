@@ -1,0 +1,17 @@
+{
+  "model": "simple_cnn",
+  "env": "baseline",
+  "attack": "collusion",
+  "defense": "clipped_median",
+  "optimizer": "sgd",
+  "lr": 0.01,
+  "local_ep": 1,
+  "local_bs": 32,
+  "epochs": 40,
+  "clip_norm": 2.5,
+  "attack_scale": -5.0,
+  "malicious_ids": "0,1",
+  "delayed_ids": "0,1,2",
+  "virtual_deadline": 10.0,
+  "seed": 1
+}
