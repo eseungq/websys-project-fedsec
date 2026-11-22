@@ -16,7 +16,7 @@ class MLP(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
-        x = x.view(-1, x.shape[1]*x.shape[-2]*x.shape[-1])
+        x = x.view(-1, x.shape[1] * x.shape[-2] * x.shape[-1])
         x = self.layer_input(x)
         x = self.dropout(x)
         x = self.relu(x)
@@ -36,7 +36,7 @@ class CNNMnist(nn.Module):
     def forward(self, x):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, x.shape[1]*x.shape[2]*x.shape[3])
+        x = x.view(-1, x.shape[1] * x.shape[2] * x.shape[3])
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
@@ -50,13 +50,15 @@ class CNNFashion_Mnist(nn.Module):
             nn.Conv2d(1, 16, kernel_size=5, padding=2),
             nn.BatchNorm2d(16),
             nn.ReLU(),
-            nn.MaxPool2d(2))
+            nn.MaxPool2d(2),
+        )
         self.layer2 = nn.Sequential(
             nn.Conv2d(16, 32, kernel_size=5, padding=2),
             nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.MaxPool2d(2))
-        self.fc = nn.Linear(7*7*32, 10)
+            nn.MaxPool2d(2),
+        )
+        self.fc = nn.Linear(7 * 7 * 32, 10)
 
     def forward(self, x):
         out = self.layer1(x)
@@ -85,9 +87,10 @@ class CNNCifar(nn.Module):
         x = self.fc3(x)
         return F.log_softmax(x, dim=1)
 
+
 class modelC(nn.Module):
     def __init__(self, input_size, n_classes=10, **kwargs):
-        super(AllConvNet, self).__init__()
+        super(modelC, self).__init__()
         self.conv1 = nn.Conv2d(input_size, 96, 3, padding=1)
         self.conv2 = nn.Conv2d(96, 96, 3, padding=1)
         self.conv3 = nn.Conv2d(96, 96, 3, padding=1, stride=2)
@@ -96,20 +99,18 @@ class modelC(nn.Module):
         self.conv6 = nn.Conv2d(192, 192, 3, padding=1, stride=2)
         self.conv7 = nn.Conv2d(192, 192, 3, padding=1)
         self.conv8 = nn.Conv2d(192, 192, 1)
-
         self.class_conv = nn.Conv2d(192, n_classes, 1)
 
-
     def forward(self, x):
-        x_drop = F.dropout(x, .2)
+        x_drop = F.dropout(x, 0.2)
         conv1_out = F.relu(self.conv1(x_drop))
         conv2_out = F.relu(self.conv2(conv1_out))
         conv3_out = F.relu(self.conv3(conv2_out))
-        conv3_out_drop = F.dropout(conv3_out, .5)
+        conv3_out_drop = F.dropout(conv3_out, 0.5)
         conv4_out = F.relu(self.conv4(conv3_out_drop))
         conv5_out = F.relu(self.conv5(conv4_out))
         conv6_out = F.relu(self.conv6(conv5_out))
-        conv6_out_drop = F.dropout(conv6_out, .5)
+        conv6_out_drop = F.dropout(conv6_out, 0.5)
         conv7_out = F.relu(self.conv7(conv6_out_drop))
         conv8_out = F.relu(self.conv8(conv7_out))
 
@@ -119,29 +120,29 @@ class modelC(nn.Module):
         pool_out.squeeze_(-1)
         return pool_out
 
+
 class SimpleCNN(nn.Module):
-    """합성곱 3층 + 완전연결 2층 구조 (BatchNorm 제외, CIFAR-10 32x32x3용)"""
-    def __init__(self, args):
+    """학습용 작은 CNN (BatchNorm 제외, 팀 공동 기준 모델 구조와 일치, raw logits 반환)"""
+    def __init__(self, args=None, num_classes=10):
         super(SimpleCNN, self).__init__()
+        n_cls = getattr(args, "num_classes", num_classes) if args is not None else num_classes
         self.features = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # 32x16x16
+            nn.MaxPool2d(2),  # 32 -> 16
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # 64x8x8
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.MaxPool2d(2),  # 16 -> 8
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # 128x4x4
+            nn.MaxPool2d(2),  # 8 -> 4
         )
         self.classifier = nn.Sequential(
-            nn.Linear(128 * 4 * 4, 256),
+            nn.Flatten(),
+            nn.Linear(64 * 4 * 4, 256),
             nn.ReLU(),
-            nn.Linear(256, args.num_classes),
+            nn.Linear(256, n_cls),
         )
 
     def forward(self, x):
-        x = self.features(x)
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        return F.log_softmax(x, dim=1)
+        return self.classifier(self.features(x))

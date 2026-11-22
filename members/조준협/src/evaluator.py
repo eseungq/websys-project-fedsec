@@ -2,24 +2,62 @@ import os
 import glob
 import json
 import csv
+import argparse
 from collections import defaultdict
 
 
-def compute_security_comparison_table(log_dir="../save/logs"):
+def compute_security_comparison_table(log_dir="../save/logs", target_model=None, target_optimizer=None, target_epochs=None):
     """
-    저장된 로그 파일들로부터 환경·시드별 정량 지표(%p) 자동 계산:
-    - 공격 피해 = 정상 FedAvg - 공격 FedAvg
-    - 방어 개선 = 공격+방어 - 공격 FedAvg
-    - 정상 손실 = 정상 FedAvg - 정상+방어
+    저장된 로그 파일들로부터 동일한 실험 설정(model, optimizer, epochs) 내에서
+    환경·시드별 정량 지표(%p) 자동 계산:
+      - 공격 피해 = 정상 FedAvg - 공격 FedAvg
+      - 방어 개선 = 공격+방어 - 공격 FedAvg
+      - 정상 손실 = 정상 FedAvg - 정상+방어
     """
     files = sorted(glob.glob(os.path.join(log_dir, "log_*.json")))
-    raw_records = []
-    # lookup[(env, seed, attack, defense)] = final_test_acc
-    lookup = {}
+    loaded_items = []
 
     for fp in files:
         with open(fp, "r", encoding="utf-8") as f:
             data = json.load(f)
+        cfg = data.get("config", {})
+        history = data.get("round_history", [])
+        num_rounds = len(history)
+        if num_rounds == 0:
+            continue
+
+        model_name = cfg.get("model", "cnn")
+        optimizer_name = cfg.get("optimizer", "adam")
+
+        if target_model and model_name != target_model:
+            continue
+        if target_optimizer and optimizer_name != target_optimizer:
+            continue
+        if target_epochs is not None and num_rounds != int(target_epochs):
+            continue
+
+        loaded_items.append((fp, data, model_name, optimizer_name, num_rounds))
+
+    if not loaded_items:
+        return [], []
+
+    # 필터 미지정 시 가장 많은 실험 로그가 쌓인 (model, optimizer, num_rounds) 설정 그룹을 자동 선택
+    if target_model is None and target_optimizer is None and target_epochs is None:
+        setting_counts = defaultdict(int)
+        for _, _, m_name, o_name, n_rnd in loaded_items:
+            setting_counts[(m_name, o_name, n_rnd)] += 1
+        best_setting = max(setting_counts.items(), key=lambda x: x[1])[0]
+        loaded_items = [
+            item for item in loaded_items
+            if (item[2], item[3], item[4]) == best_setting
+        ]
+
+    raw_records = []
+    # lookup[(env, seed, attack, defense)] = final_test_acc
+    lookup = {}
+    detected_defenses = set()
+
+    for _, data, model_name, optimizer_name, num_rounds in loaded_items:
         cfg = data.get("config", {})
         env = cfg.get("env", "baseline")
         attack = cfg.get("attack", "none")
@@ -28,8 +66,14 @@ def compute_security_comparison_table(log_dir="../save/logs"):
         acc = float(data.get("final_test_acc", 0.0))
 
         lookup[(env, seed, attack, defense)] = acc
+        if defense != "fedavg":
+            detected_defenses.add(defense)
+
         raw_records.append({
             "exp_id": data.get("exp_id"),
+            "model": model_name,
+            "optimizer": optimizer_name,
+            "rounds": num_rounds,
             "env": env,
             "attack": attack,
             "defense": defense,
@@ -39,7 +83,7 @@ def compute_security_comparison_table(log_dir="../save/logs"):
 
     envs = sorted(list(set(k[0] for k in lookup.keys())))
     seeds = sorted(list(set(k[1] for k in lookup.keys())))
-    defenses = ["clipped_fedavg", "clipped_median"]
+    defenses = sorted(list(detected_defenses)) if detected_defenses else ["clipped_fedavg", "clipped_median"]
 
     comparison_rows = []
     for env in envs:
@@ -96,7 +140,19 @@ def compute_security_comparison_table(log_dir="../save/logs"):
 
 
 if __name__ == "__main__":
-    rows, _ = compute_security_comparison_table("../save/logs")
+    parser = argparse.ArgumentParser(description="연합학습 보안 실험 정량 평가표(%p) 생성기")
+    parser.add_argument("--log_dir", type=str, default="../save/logs")
+    parser.add_argument("--model", type=str, default=None, help="특정 모델만 필터링 (예: simple_cnn)")
+    parser.add_argument("--optimizer", type=str, default=None, help="특정 옵티마이저만 필터링 (예: sgd)")
+    parser.add_argument("--epochs", type=int, default=None, help="특정 라운드 수만 필터링 (예: 40)")
+    args = parser.parse_args()
+
+    rows, _ = compute_security_comparison_table(
+        log_dir=args.log_dir,
+        target_model=args.model,
+        target_optimizer=args.optimizer,
+        target_epochs=args.epochs,
+    )
     os.makedirs("../save/tables", exist_ok=True)
     csv_path = "../save/tables/security_evaluation_summary.csv"
 

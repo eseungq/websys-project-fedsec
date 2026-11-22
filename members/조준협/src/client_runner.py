@@ -37,6 +37,12 @@ def train_and_eval_local_client(model, train_dataset, user_idxs, args, device):
     model.to(device)
     criterion = nn.NLLLoss().to(device)
 
+    # SimpleCNN은 raw logits 반환 -> CrossEntropyLoss / CNNCifar는 log_softmax 반환 -> NLLLoss
+    if args.model == "simple_cnn":
+        criterion = nn.CrossEntropyLoss().to(device)
+    else:
+        criterion = nn.NLLLoss().to(device)
+
     if args.optimizer == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
     else:

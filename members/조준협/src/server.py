@@ -110,7 +110,11 @@ class FederatedServerState:
     def evaluate_global_model(self, detailed_classes=False):
         """전역 모델 테스트 정확도(%)·손실 및 선택적 클래스별(10종) 성능 계산"""
         self.global_model.eval()
-        criterion = nn.NLLLoss().to(self.device)
+        model_name = self.exp_config.get("model", "cnn")
+        if model_name == "simple_cnn":
+            criterion = nn.CrossEntropyLoss().to(self.device)
+        else:
+            criterion = nn.NLLLoss().to(self.device)
         loss_sum, correct, total = 0.0, 0, 0
 
         num_classes = 10
@@ -351,6 +355,16 @@ def submit_update():
     encoded_delta = data.get("delta_weights")
     virtual_time = float(data.get("virtual_time", 0.0))
     deadline = float(server_state.exp_config.get("virtual_deadline", 10.0))
+
+    if not isinstance(client_id, int) or isinstance(client_id, bool) or not (0 <= client_id < server_state.num_clients):
+        reason = f"유효하지 않은 클라이언트 ID: {client_id}"
+        server_state.log_exclusion(client_id, req_round, req_version, reason, virtual_time)
+        return jsonify({"status": "rejected", "reason": reason}), 400
+
+    if not isinstance(num_samples, (int, float)) or num_samples <= 0:
+        reason = f"유효하지 않은 표본 수(num_samples): {num_samples}"
+        server_state.log_exclusion(client_id, req_round, req_version, reason, virtual_time)
+        return jsonify({"status": "rejected", "reason": reason}), 400
 
     if req_round != server_state.current_round:
         reason = f"라운드 불일치 (서버: {server_state.current_round}, 제출: {req_round})"
