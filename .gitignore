@@ -29,6 +29,7 @@ docs/00_spec/*.pdf
 node_modules/
 
 # 조원 폴더의 데이터, 모델 파일, 노트북 체크포인트
-members/*/data/
+members/*/data/*
+!members/*/data/README.md
 *.pt
 .ipynb_checkpoints/
