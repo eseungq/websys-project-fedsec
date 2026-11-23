@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FL Security Simulator (CIFAR-10)</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <!-- 상단 헤더 -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo-badge">FL</div>
+      <div>
+        <h1 class="app-title">FL Security Simulator <span class="sub-tag">CIFAR-10</span></h1>
+        <p class="app-subtitle">연합학습 보안 시뮬레이션 및 공격·방어 결과 원인 분석 대시보드</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="status-pill" class="status-pill status-idle">● 대기 중 (Round 0 / 10)</span>
+      <div class="time-box">
+        <span>가상 경과: <strong id="virtual-time">0.0s</strong></span>
+        <span class="divider">|</span>
+        <span>실제 실행: <strong id="real-time">0.0s</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <!-- 좌측 실험 제어 패널 -->
+    <aside class="sidebar">
+      <section class="control-group">
+        <h2 class="group-title">1. 운영 환경 선택 (4종)</h2>
+        <label class="radio-card">
+          <input type="radio" name="environment" value="normal" checked />
+          <div>
+            <div class="radio-title">정상 환경 (Baseline)</div>
+            <div class="radio-desc">참여 100% · 지연 없음 · IID 균등 분할</div>
+          </div>
+        </label>
+        <label class="radio-card">
+          <input type="radio" name="environment" value="delay" />
+          <div>
+            <div class="radio-title">네트워크 지연 (Delay)</div>
+            <div class="radio-desc">고정 3명(#2, #5, #8) 가상 마감(10s) 초과</div>
+          </div>
+        </label>
+        <label class="radio-card">
+          <input type="radio" name="environment" value="partial" />
+          <div>
+            <div class="radio-title">부분 참여 (Partial)</div>
+            <div class="radio-desc">라운드마다 10명 중 5명 무작위 선택</div>
+          </div>
+        </label>
+        <label class="radio-card">
+          <input type="radio" name="environment" value="label_skew" />
+          <div>
+            <div class="radio-title">레이블 편향 (Non-IID)</div>
+            <div class="radio-desc">동일 40,000장 풀 · 클라이언트당 2클래스 편중</div>
+          </div>
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h2 class="group-title">2. 공격 시나리오 (3종)</h2>
+        <label class="radio-card">
+          <input type="radio" name="attack" value="normal" checked />
+          <div>
+            <div class="radio-title">정상 (공격 없음)</div>
+            <div class="radio-desc">모든 클라이언트 정상 Δw 업데이트 제출</div>
+          </div>
+        </label>
+        <label class="radio-card">
+          <input type="radio" name="attack" value="dlg" />
+          <div>
+            <div class="radio-title">모델 역추적 (DLG)</div>
+            <div class="radio-desc">단일 이미지 1회 그래디언트 복원 실험</div>
+          </div>
+        </label>
+        <label class="radio-card">
+          <input type="radio" name="attack" value="collusion" />
+          <div>
+            <div class="radio-title">내부자 협력 공격 (2명)</div>
+            <div class="radio-desc">악성(#3, #7) 정상 평균의 -5배 벡터 제출</div>
+          </div>
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h2 class="group-title" id="defense-group-title">3. 방어 기법 선택</h2>
+        <!-- 학습 공격용 방어 선택 -->
+        <div id="fl-defense-wrapper">
+          <select id="defense-select" class="form-select">
+            <option value="none">방어 없음 (기본 FedAvg)</option>
+            <option value="clipping">L2 노름 클리핑 + FedAvg (C=1.5)</option>
+            <option value="median">좌표별 중앙값 (Coordinate-wise Median)</option>
+          </select>
+          <p class="helper-text">* 방어 함수에는 악성 ID 정답이 전달되지 않습니다.</p>
+        </div>
+        <!-- DLG 공격용 가우시안 노이즈 선택 -->
+        <div id="dlg-defense-wrapper" class="hidden">
+          <select id="dlg-noise-select" class="form-select">
+            <option value="none">노이즈 없음 (σ = 0.0)</option>
+            <option value="small">작은 가우시안 노이즈 (σ = 0.01)</option>
+            <option value="large">큰 가우시안 노이즈 (σ = 0.1)</option>
+          </select>
+          <p class="helper-text">* 전송 전 그래디언트에 가우시안 노이즈 주입</p>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2 class="group-title">4. 실험 공통 파라미터</h2>
+        <div class="input-row">
+          <div class="input-col">
+            <label for="seed-input">Random Seed</label>
+            <input type="number" id="seed-input" class="form-input" value="1" min="1" max="999" />
+          </div>
+          <div class="input-col">
+            <label for="epochs-input">Rounds</label>
+            <input type="number" id="epochs-input" class="form-input" value="10" min="1" max="50" />
+          </div>
+        </div>
+      </section>
+
+      <div class="action-buttons">
+        <button id="btn-start" class="btn btn-primary">▶ 시뮬레이션 실행</button>
+        <button id="btn-stop" class="btn btn-secondary" disabled>■ 강제 중지</button>
+      </div>
+      <div id="error-banner" class="error-banner hidden"></div>
+    </aside>
+
+    <!-- 우측 메인 대시보드 영역 -->
+    <main class="content-area">
+      <!-- 상단 KPI 카드 4종 -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">최종 테스트 정확도</div>
+          <div class="kpi-value" id="kpi-test-acc">-</div>
+          <div class="kpi-sub" id="kpi-val-acc">최근 검증 정확도: -</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">참여 / 채택 / 제외 현황</div>
+          <div class="kpi-value" id="kpi-adoption">0 / 0 / 0</div>
+          <div class="kpi-sub">선택 · 집계채택 · 마감/검증제외</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">실제 채택 악성 비율</div>
+          <div class="kpi-value" id="kpi-mal-ratio">N/A</div>
+          <div class="kpi-sub" id="kpi-total-mal">전체 악성 비율: 20.0%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">보안 지표 (동일 환경·시드 기준)</div>
+          <div class="kpi-value-small" id="kpi-sec-gain">방어 개선: -</div>
+          <div class="kpi-sub" id="kpi-sec-damage">공격 피해: - | 정상 손실: -</div>
+        </div>
+      </section>
+
+      <!-- 실시간 10개 클라이언트 순차 실행 모니터 -->
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">실시간 클라이언트 순차 실행 모니터 (10 Clients)</h2>
+            <p class="panel-desc">하나의 실행 프로그램에서 가상 클라이언트 #0 ~ #9가 순차 생성되어 학습·전송하는 상태를 실시간 표시합니다.</p>
+          </div>
+          <div class="legend-group">
+            <span class="legend-item"><i class="dot dot-training"></i>학습 중</span>
+            <span class="legend-item"><i class="dot dot-accepted"></i>채택 완료</span>
+            <span class="legend-item"><i class="dot dot-delayed"></i>지연 제외</span>
+            <span class="legend-item"><i class="dot dot-waiting"></i>대기</span>
+            <span class="legend-item"><i class="dot dot-unselected"></i>미참여</span>
+          </div>
+        </div>
+        <div id="client-grid" class="client-grid">
+          <!-- JS에서 10개 카드 동적 렌더링 -->
+        </div>
+      </section>
+
+      <!-- 메인 분석 탭 패널 -->
+      <section class="panel">
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="tab-trends">1. 학습·참여 추이</button>
+          <button class="tab-btn" data-tab="tab-dlg">2. 모델 역추적 (DLG)</button>
+          <button class="tab-btn" data-tab="tab-compare">3. 환경·방어 비교표 (%p)</button>
+          <button class="tab-btn" data-tab="tab-rerun">4. 특정 라운드 재실행</button>
+        </div>
+
+        <!-- 탭 1: 학습·참여 추이 -->
+        <div id="tab-trends" class="tab-content active">
+          <div class="charts-two-col">
+            <div class="chart-box">
+              <div class="chart-header">
+                <h3>라운드별 검증 정확도 (%) & 손실 추이</h3>
+                <div class="chart-legend">
+                  <span class="c-blue">● 검증 정확도(%)</span>
+                  <span class="c-emerald">● 검증 손실(Loss)</span>
+                </div>
+              </div>
+              <div id="trend-chart-container" class="svg-chart-wrap">
+                <div class="empty-state">시뮬레이션을 실행하면 라운드별 정확도·손실 곡선이 표시됩니다.</div>
+              </div>
+            </div>
+            <div class="chart-box">
+              <div class="chart-header">
+                <h3>최종 클래스별(0~9) & 클라이언트별(#0~#9) 정확도</h3>
+              </div>
+              <div id="breakdown-container" class="breakdown-wrap">
+                <div class="empty-state">모든 라운드 완료 후 클래스별·클라이언트별 세부 정확도가 표시됩니다.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 2: 모델 역추적 (DLG) -->
+        <div id="tab-dlg" class="tab-content">
+          <div id="dlg-empty" class="empty-state">
+            좌측 공격 시나리오에서 <strong>[모델 역추적 (DLG)]</strong>을 선택하고 실행하면 원본·복원 이미지 비교와 픽셀 오차(MSE)가 표시됩니다.
+          </div>
+          <div id="dlg-result-view" class="dlg-grid hidden">
+            <div class="dlg-images-box">
+              <div class="img-card">
+                <div class="img-title">원본 입력 이미지 (Ground Truth)</div>
+                <img id="dlg-gt-img" src="" alt="원본 이미지" />
+                <div class="img-meta" id="dlg-gt-meta">정답 클래스: -</div>
+              </div>
+              <div class="dlg-arrow">➔<br /><span>1회 그래디언트 역추적</span></div>
+              <div class="img-card">
+                <div class="img-title">DLG 복원 이미지 (Reconstructed)</div>
+                <img id="dlg-rec-img" src="" alt="복원 이미지" />
+                <div class="img-meta" id="dlg-rec-meta">추론 클래스: -</div>
+              </div>
+            </div>
+            <div class="dlg-metrics-box">
+              <h3>역추적 정량 평가 및 방어 효과</h3>
+              <table class="mini-table">
+                <tbody>
+                  <tr><th>노이즈 설정</th><td id="dlg-noise-info">-</td></tr>
+                  <tr><th>복원 반복 횟수</th><td id="dlg-iter-info">-</td></tr>
+                  <tr><th>픽셀 오차 (MSE)</th><td><strong id="dlg-mse-info" class="highlight-num">-</strong></td></tr>
+                  <tr><th>대상 데이터 인덱스</th><td id="dlg-idx-info">-</td></tr>
+                </tbody>
+              </table>
+              <p class="helper-text" style="margin-top: 10px;">
+                * 원본 이미지와 정답은 공격 알고리즘 입력으로 제공되지 않았으며, 복원 완료 후 MSE 평가에만 사용되었습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 3: 환경·방어 비교표 -->
+        <div id="tab-compare" class="tab-content">
+          <div class="compare-summary-bar">
+            <div class="metric-pill">공격 피해 (정상 - 공격): <strong id="cmp-damage">-</strong></div>
+            <div class="metric-pill">방어 개선 (공격+방어 - 공격): <strong id="cmp-gain">-</strong></div>
+            <div class="metric-pill">정상 손실 (정상 - 정상+방어): <strong id="cmp-loss">-</strong></div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>실험 ID</th>
+                  <th>운영 환경</th>
+                  <th>공격 유형</th>
+                  <th>방어 기법</th>
+                  <th>Seed</th>
+                  <th>최종 테스트 정확도</th>
+                  <th>최종 검증 정확도</th>
+                  <th>채택 악성 비율</th>
+                </tr>
+              </thead>
+              <tbody id="compare-tbody">
+                <tr><td colspan="8" class="text-center">완료된 실험 기록이 아직 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 탭 4: 특정 라운드 재실행 (원인 분석) -->
+        <div id="tab-rerun" class="tab-content">
+          <div class="rerun-box">
+            <h3>저장된 라운드 체크포인트 기반 조건 변경 재실행</h3>
+            <p class="panel-desc">동일한 시작 모델과 참여 조건에서 방어 기법만 바꾸어 재집계한 결과를 즉시 비교합니다.</p>
+            <div class="rerun-controls">
+              <div class="input-col">
+                <label>대상 실험 ID</label>
+                <input type="text" id="rerun-exp-id" class="form-input" placeholder="자동 입력됨" />
+              </div>
+              <div class="input-col" style="max-width: 110px;">
+                <label>대상 라운드</label>
+                <input type="number" id="rerun-round" class="form-input" value="1" min="1" />
+              </div>
+              <div class="input-col">
+                <label>변경할 방어 기법</label>
+                <select id="rerun-defense" class="form-select">
+                  <option value="none">방어 없음 (FedAvg)</option>
+                  <option value="clipping">L2 노름 클리핑</option>
+                  <option value="median" selected>좌표별 중앙값 (Median)</option>
+                </select>
+              </div>
+              <div class="input-col" style="justify-content: flex-end;">
+                <button id="btn-rerun" class="btn btn-primary">재실행 비교 분석</button>
+              </div>
+            </div>
+            <div id="rerun-result-box" class="rerun-result hidden"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 최하단 실시간 감사 로그 테이블 -->
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">실시간 클라이언트·집계 감사 로그 (Audit Log)</h2>
+            <p class="panel-desc">조작·방어 전후 업데이트 L2 노름, 채택·제외 판정 및 사유, 가상/실제 시간을 기록합니다.</p>
+          </div>
+          <button id="btn-download-csv" class="btn btn-outline" disabled>CSV 로그 다운로드</button>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Round</th>
+                <th>Client</th>
+                <th>역할/상태</th>
+                <th>표본 수</th>
+                <th>조작전 Norm</th>
+                <th>조작후 Norm</th>
+                <th>방어후 Norm</th>
+                <th>판정</th>
+                <th>사유</th>
+                <th>가상 / 실제 시간</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody">
+              <tr><td colspan="10" class="text-center">기록된 로그가 없습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
