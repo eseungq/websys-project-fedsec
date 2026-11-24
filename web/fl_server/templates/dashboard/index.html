@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<!-- 안태현 PR #8 대시보드(MIT)를 바탕으로 이 엔진에 맞게 다시 작성 (라이선스: web/fl_server/LICENSE-dashboard) -->
+<!-- 값은 모두 JS가 textContent·createElement로 넣는다 (서버·파일 데이터를 HTML 문자열로 넣지 않음) -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FL Security Simulator (CIFAR-10)</title>
+  <link rel="stylesheet" href="{{ url_for('dashboard.static', filename='css/style.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo-badge">FL</div>
+      <div>
+        <h1 class="app-title">FL Security Simulator <span class="sub-tag">CIFAR-10</span></h1>
+        <p class="app-subtitle">연합학습 보안 시뮬레이션 결과 조회 · 시연 실행 대시보드</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="status-pill" class="status-pill status-idle">● 실행 대기</span>
+      <div class="time-box">
+        <span>가상 경과: <strong id="virtual-time">-</strong></span>
+        <span class="divider">|</span>
+        <span>실제 실행: <strong id="real-time">-</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <aside class="sidebar">
+      <div class="mode-tabs">
+        <button type="button" class="mode-btn active" data-mode="browse">조회형 (결과 보기)</button>
+        <button type="button" class="mode-btn" data-mode="live">실행형 (시연)</button>
+      </div>
+
+      <!-- 조회형: experiments/ 아래 summary.json이 있는 결과 폴더 -->
+      <div id="panel-browse">
+        <section class="control-group">
+          <h2 class="group-title">결과 폴더 (experiments/)</h2>
+          <div class="input-row mb-12">
+            <select id="group-select" class="form-select" aria-label="결과 묶음">
+              <option value="">전체</option>
+            </select>
+            <button type="button" id="btn-refresh" class="btn btn-outline">새로고침</button>
+          </div>
+          <div id="run-list" class="run-list">
+            <div class="empty-state">불러오는 중…</div>
+          </div>
+          <p class="helper-text">* 파일을 읽기만 합니다. 재실행 결과(experiments/replay/)도 자동으로 보입니다.</p>
+        </section>
+      </div>
+
+      <!-- 실행형: 같은 서버의 상태를 새로 만들고 run_clients.py를 띄움 -->
+      <div id="panel-live" class="hidden">
+        <section class="control-group">
+          <h2 class="group-title">1. 운영 환경 (4종)</h2>
+          <label class="radio-card">
+            <input type="radio" name="env" value="baseline" checked />
+            <div>
+              <div class="radio-title">기준 환경 (baseline)</div>
+              <div class="radio-desc">전원 참여 · 지연 없음 · IID 분할</div>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="env" value="delay" />
+            <div>
+              <div class="radio-title">네트워크 지연 (delay)</div>
+              <div class="radio-desc">시드로 고른 3명이 가상 마감 초과 → late 제외</div>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="env" value="partial" />
+            <div>
+              <div class="radio-title">부분 참여 (partial)</div>
+              <div class="radio-desc">라운드마다 10명 중 5명 무작위 선택</div>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="env" value="label_skew" />
+            <div>
+              <div class="radio-title">레이블 편향 (label_skew)</div>
+              <div class="radio-desc">같은 이미지 풀 · Dirichlet(α=0.5) 배정</div>
+            </div>
+          </label>
+        </section>
+
+        <section class="control-group">
+          <h2 class="group-title">2. 공격</h2>
+          <label class="radio-card">
+            <input type="radio" name="attack" value="normal" checked />
+            <div>
+              <div class="radio-title">정상 (공격 없음)</div>
+              <div class="radio-desc">모든 클라이언트가 정상 업데이트 제출</div>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="attack" value="attack" />
+            <div>
+              <div class="radio-title">내부자 공모 공격 (2명)</div>
+              <div class="radio-desc">악성 2명이 정상 평균의 −5배를 제출</div>
+            </div>
+          </label>
+        </section>
+
+        <section class="control-group">
+          <h2 class="group-title">3. 집계·방어</h2>
+          <select id="aggregator-select" class="form-select" aria-label="집계 방식">
+            <option value="fedavg">방어 없음 (FedAvg)</option>
+            <option value="clip_fedavg">L2 노름 클리핑 + FedAvg</option>
+            <option value="median">좌표별 중앙값</option>
+          </select>
+          <p class="helper-text">* 방어 함수에는 악성 ID 정답이 전달되지 않습니다.</p>
+        </section>
+
+        <section class="control-group">
+          <h2 class="group-title">4. 공통 파라미터</h2>
+          <div class="input-row">
+            <div class="input-col">
+              <label for="seed-input">Seed (0~9999)</label>
+              <input type="number" id="seed-input" class="form-input" value="0" min="0" max="9999" />
+            </div>
+            <div class="input-col">
+              <label for="rounds-input">Rounds (1~{{ max_rounds }})</label>
+              <input type="number" id="rounds-input" class="form-input" value="3" min="1" max="{{ max_rounds }}" />
+            </div>
+          </div>
+        </section>
+
+        <div class="action-buttons">
+          <button type="button" id="btn-start" class="btn btn-primary">▶ 실행</button>
+          <button type="button" id="btn-stop" class="btn btn-secondary" disabled>■ 중지</button>
+        </div>
+        <div id="error-banner" class="error-banner hidden"></div>
+        <p class="helper-text">* 결과는 experiments/live/에 저장됩니다 (git 무시). 한 번에 한 실행만 됩니다.</p>
+        <pre id="log-tail" class="log-tail hidden"></pre>
+      </div>
+    </aside>
+
+    <main class="content-area">
+      <div id="view-title" class="view-title">왼쪽에서 결과 폴더를 고르거나 시연 실행을 시작하세요.</div>
+      <div id="replay-box" class="replay-box hidden"></div>
+
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">최종 정확도</div>
+          <div class="kpi-value" id="kpi-acc">-</div>
+          <div class="kpi-sub" id="kpi-acc-sub">테스트 / 마지막 검증</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">선택 / 채택 / 지연 (마지막 라운드)</div>
+          <div class="kpi-value" id="kpi-participation">-</div>
+          <div class="kpi-sub" id="kpi-participation-sub">전체 라운드 합계: -</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">채택된 악성 비율 (마지막 라운드)</div>
+          <div class="kpi-value" id="kpi-mal-ratio">-</div>
+          <div class="kpi-sub" id="kpi-mal-sub">전체 악성 비율: -</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">실행 요약</div>
+          <div class="kpi-value-small" id="kpi-summary">-</div>
+          <div class="kpi-sub" id="kpi-summary-sub">-</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">클라이언트 상태 (마지막 라운드, 10 Clients)</h2>
+            <p class="panel-desc">clients.csv의 마지막 라운드 판정입니다. 악성·지연 표시는 config.yaml의 실행 계획(plan)에서 가져옵니다.</p>
+          </div>
+          <div class="legend-group">
+            <span class="legend-item"><i class="dot dot-accepted"></i>채택</span>
+            <span class="legend-item"><i class="dot dot-delayed"></i>제외(late 등)</span>
+            <span class="legend-item"><i class="dot dot-training"></i>학습 중</span>
+            <span class="legend-item"><i class="dot dot-unselected"></i>미선택</span>
+          </div>
+        </div>
+        <div id="client-grid" class="client-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="tab-bar" role="tablist">
+          <button type="button" class="tab-btn active" data-tab="tab-trends">1. 학습·참여 추이</button>
+          <button type="button" class="tab-btn" data-tab="tab-clients">2. 클라이언트별</button>
+          <button type="button" class="tab-btn" data-tab="tab-dlg">3. 모델 역추적 (DLG)</button>
+          <button type="button" class="tab-btn" data-tab="tab-compare">4. 환경·방어 비교표 (%p)</button>
+          <button type="button" class="tab-btn" data-tab="tab-replay">5. 재실행 결과</button>
+        </div>
+
+        <div id="tab-trends" class="tab-content active">
+          <div class="charts-two-col">
+            <div class="chart-box">
+              <div class="chart-header">
+                <h3>라운드별 검증 정확도 (%) · 검증 손실</h3>
+                <div class="chart-legend">
+                  <span class="c-blue">● 검증 정확도(%)</span>
+                  <span class="c-emerald">● 검증 손실</span>
+                </div>
+              </div>
+              <div id="trend-chart" class="svg-chart-wrap">
+                <div class="empty-state">결과를 고르면 라운드별 곡선이 표시됩니다.</div>
+              </div>
+            </div>
+            <div class="chart-box">
+              <div class="chart-header"><h3>마지막 라운드 클래스별 · 클라이언트별 정확도</h3></div>
+              <div id="breakdown" class="breakdown-wrap">
+                <div class="empty-state">class_acc.csv · client_acc.csv가 있으면 표시됩니다.</div>
+              </div>
+            </div>
+          </div>
+          <div class="section-subtitle">라운드별 참여 현황 (rounds.csv)</div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Round</th><th>검증 정확도</th><th>검증 손실</th><th>선택</th><th>채택</th><th>지연</th>
+                  <th>악성 선택</th><th>악성 채택</th><th>채택 악성 비율</th><th>모델 갱신</th><th>집계 노름</th><th>가상 시간</th>
+                </tr>
+              </thead>
+              <tbody id="rounds-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-clients" class="tab-content">
+          <p class="panel-desc mb-12">전체 라운드의 clients.csv를 클라이언트별로 모았습니다.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Client</th><th>역할</th><th>표본 수</th><th>선택</th><th>채택</th><th>제외</th>
+                  <th>평균 정상 노름</th><th>평균 제출 노름</th><th>평균 방어 후 노름</th><th>마지막 검증 정확도</th>
+                </tr>
+              </thead>
+              <tbody id="clients-tbody"></tbody>
+            </table>
+          </div>
+          <div class="info-grid mt-12">
+            <div>
+              <div class="section-subtitle">실행 요약 (summary.json)</div>
+              <table class="mini-table kv-table"><tbody id="summary-tbody"></tbody></table>
+            </div>
+            <div>
+              <div class="section-subtitle">서버 제외 기록 (server/exclusions.csv)</div>
+              <div class="table-scroll">
+                <table class="data-table">
+                  <thead><tr><th>Round</th><th>Client</th><th>사유</th><th>설명</th></tr></thead>
+                  <tbody id="exclusions-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-dlg" class="tab-content">
+          <p class="panel-desc mb-12">experiments/dlg/의 결과입니다. 원본은 공격 입력이 아니며 복원 뒤 MSE 계산에만 쓰였습니다.</p>
+          <select id="dlg-select" class="form-select mb-12" aria-label="DLG 실험"></select>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>이미지</th><th>클래스</th><th>σ</th><th>반복</th><th>MSE</th><th>레이블 복원</th>
+                  <th>원본</th><th>복원</th>
+                </tr>
+              </thead>
+              <tbody id="dlg-tbody"></tbody>
+            </table>
+          </div>
+          <div class="section-subtitle">σ별 평균 MSE</div>
+          <div id="dlg-mse-bars"></div>
+          <div id="dlg-summary"></div>
+        </div>
+
+        <div id="tab-compare" class="tab-content">
+          <div id="compare-empty" class="empty-state hidden">experiments/matrix/_tables/comparison.csv가 없습니다. scripts/compare_matrix.py를 먼저 실행하세요.</div>
+          <div class="section-subtitle">명세의 세 값 (%p, 시드별 값과 평균)</div>
+          <p class="helper-text">공격 피해 = 정상 FedAvg − 공격 FedAvg · 방어 개선 = 공격+방어 − 공격 FedAvg · 정상 손실 = 정상 FedAvg − 정상+방어. 발산한 칸은 괄호 안에 발산 전 모델 기준 참고값.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead id="metric-thead"></thead>
+              <tbody id="metric-tbody"></tbody>
+            </table>
+          </div>
+          <div class="section-subtitle">최종 테스트 정확도 (%, 시드별 · 평균)</div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead id="acc-thead"></thead>
+              <tbody id="acc-tbody"></tbody>
+            </table>
+          </div>
+          <div id="compare-chart"></div>
+        </div>
+
+        <div id="tab-replay" class="tab-content">
+          <p class="panel-desc mb-12">replay.json이 있는 결과 폴더(재실행 도구의 결과)입니다. 화면에서 재실행하지는 않습니다. 행을 누르면 그 결과를 엽니다.</p>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>결과 폴더</th><th>원래 실행</th><th>시작 라운드</th><th>바꾼 조건</th><th>최종 검증</th><th>최종 테스트</th></tr>
+              </thead>
+              <tbody id="replay-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">클라이언트·집계 기록 (clients.csv)</h2>
+            <p class="panel-desc">조작 전후·방어 후 업데이트 L2 노름, 채택·제외 판정과 사유, 가상 완료 시각 (최근 라운드부터)</p>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Round</th><th>Client</th><th>역할</th><th>표본 수</th><th>정상 Norm</th><th>제출 Norm</th>
+                <th>방어후 Norm</th><th>판정</th><th>사유</th><th>가상 완료 / 학습 시간</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('dashboard.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('dashboard.static', filename='js/charts.js') }}"></script>
+  <script src="{{ url_for('dashboard.static', filename='js/views.js') }}"></script>
+  <script src="{{ url_for('dashboard.static', filename='js/app.js') }}"></script>
+</body>
+</html>

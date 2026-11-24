@@ -5,7 +5,7 @@
 
 Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 위에서 **내부자 협력 공격**과 **모델 역추적 공격(DLG)**, 그리고 각각의 방어를 실험합니다. 실험 결과는 라운드·클라이언트·방어 처리 로그와 연결하고, 조건을 바꾼 재실험으로 원인을 확인합니다.
 
-> 🚧 진행 중인 프로젝트입니다. 실행 방법과 결과는 구현이 진행되면서 채워집니다.
+> 11/24 조원별 구현에서 모듈별로 골라 대표 코드로 통합했습니다. 무엇을 어떻게 합쳤는지는 [대표 코드 통합](docs/통합.md)에 있습니다.
 
 ---
 
@@ -14,6 +14,7 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 - [확장 방향](#확장-방향)
 - [일정](#일정)
 - [시스템 구조](#시스템-구조)
+- [대표 코드 통합](#대표-코드-통합)
 - [디렉토리 구성](#디렉토리-구성)
 - [실험 설계](#실험-설계)
 - [실행 환경](#실행-환경)
@@ -88,44 +89,83 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 - 중앙 **Flask 서버 1개**와, 한 프로그램에서 순차 학습하는 **가상 클라이언트 10개**로 구성합니다.
 - 클라이언트는 **REST API**(같은 PC의 localhost)로 모델을 내려받고 업데이트를 제출합니다.
 - 네트워크 지연은 실제 네트워크가 아니라 **가상 시간**으로 판정합니다.
-- 구체적인 구조는 11/24 머지 후 확정합니다.
+- 웹 대시보드도 같은 Flask 서버(같은 포트)에서 함께 뜹니다. 끝난 실험 결과를 보는 조회형과, 짧은 실험을 직접 돌려 보는 실행형이 있습니다.
+
+```
+브라우저 ──(대시보드 /, /api/*)──┐
+                                 ├─ Flask 서버 1개 (127.0.0.1) ── src/fedsec (집계·방어·검증·로그)
+클라이언트 실행 프로그램 ──(REST /model, /update, /aggregate)──┘
+  └ 가상 클라이언트 10개를 한 프로세스에서 순서대로 학습 (공격은 클라이언트 쪽에서만)
+```
+
+---
+
+## 대표 코드 통합
+
+| 모듈 | 가져온 코드 |
+|---|---|
+| 엔진·서버·로그·비교표, DLG | 이승규 |
+| 라운드 재실행 도구 | 배병욱 PR #9의 방식을 참고해 새로 작성 |
+| 웹 대시보드 | 안태현 PR #8을 바탕으로 다시 작성 |
+
+선정 이유, 옮긴 위치, 새로 만든 것, 확인한 것은 **[docs/통합.md](docs/통합.md)**에 정리했습니다.
 
 ---
 
 ## 디렉토리 구성
 
+### 깃허브 (커밋되는 파일)
+
 ```
 websys-project-fedsec/
-├── README.md
-├── .gitignore
-│
-├── members/                 # 조원별 작업 공간 (11/24 머지 전까지)
-│   ├── 조준협/
-│   ├── 안태현/
-│   ├── 배병욱/
-│   └── 이승규/
-│
-├── src/fedsec/              # 실험 엔진 (11/24 머지 후 채워짐)
-├── web/fl_server/           # Flask 서버 (11/24 머지 후 채워짐)
-├── scripts/  tests/  experiments/   # 머지 후 채워짐
-├── configs/splits/          # 팀 공용 데이터 분할 파일
-│
+├── README.md  pyproject.toml  requirements.txt  .gitignore
+├── src/fedsec/              # 실험 엔진 (웹과 독립된 Python 패키지)
+│   ├── data/  models/  client/  aggregation/  attacks/  defenses/
+│   ├── environments/        # 운영 환경: 참여·지연 일정, 가상 시간, 채택 판정
+│   ├── server/              # Flask REST API, 서버 상태, 제출 검증
+│   ├── experiment/  logger/  analysis/
+├── web/fl_server/           # 웹 대시보드 (같은 Flask 서버에 붙는 Blueprint, 화면·정적 파일)
+├── scripts/                 # 실행 스크립트 (서버, 클라이언트, 일괄 실행, 재실행, DLG, 비교표, 대시보드)
+├── tests/                   # 집계·방어 수치 예제, 서버·클라이언트·재실행·대시보드 테스트
+├── tools/                   # 학습 설정 탐색 도구
+├── configs/                 # 학습·공격·방어·DLG 설정, 환경 4개(env/), 데이터 분할(splits/)
+├── experiments/             # 실험 결과: 설정·실행 환경·요약·라운드·클라이언트 로그
+│   ├── matrix/              #   본 실험 72회와 비교표(_tables/)
+│   ├── replay/              #   재실행 결과 (replay.json)
+│   ├── dlg/                 #   DLG 실험
+│   └── sweep/  norm_check/ … #   학습 설정 탐색, 클리핑 상한 측정
 ├── docs/
-│   ├── 00_spec/             # 과제 명세 요약 (PDF 원본은 커밋 안 함)
-│   ├── 01_proposal/         # 제안서
-│   ├── 02_plan/             # 계획서
-│   ├── 03_design/           # 설계 문서
-│   ├── decisions/           # 설계 결정 기록
-│   ├── meetings/            # 회의록
-│   ├── manuals/             # 설치·실행, API, 입력 파일 설명서
-│   └── references/          # 참고 자료 링크 모음
-│
+│   ├── 통합.md              # 대표 코드 통합 기록
+│   ├── stages/              # 명세 1~5단계 구현 내용·결과·한계
+│   └── 00_spec/ 01_proposal/ 02_plan/ 03_design/ decisions/ manuals/ meetings/ references/
 ├── reports/                 # 원인 분석 3건, 그래프, 발표자료
-├── data/                    # CIFAR-10 (커밋 안 함)
-└── checkpoints/             # 모델 상태 (커밋 안 함)
+├── members/                 # 조원별 원래 구현 (근거 보관용)
+│   └── 조준협/  안태현/  배병욱/  이승규/
+├── data/README.md           # 데이터 받는 방법 (데이터 자체는 커밋 안 함)
+└── checkpoints/README.md
 ```
 
-폴더마다 `README.md`에 역할과 규칙을 적어 두었습니다.
+### 프로젝트 (로컬에서 실행하면 생기는 것까지)
+
+커밋되지 않는 파일(`.gitignore`)은 ✱로 표시했습니다. 실험을 돌린 PC에만 있습니다.
+
+```
+websys-project-fedsec/
+├── .venv/                          ✱ 가상환경 (pip install -e ".[test]")
+├── data/
+│   └── cifar-10-batches-py/        ✱ CIFAR-10 원본 (data/README.md 참고)
+├── docs/00_spec/Project 5.pdf      ✱ 과제 명세 원본
+├── experiments/
+│   ├── matrix/<실행>/
+│   │   ├── config.yaml  env.json  summary.json  rounds.csv  clients.csv  class_acc.csv  client_acc.csv
+│   │   ├── server/server_rounds.csv  server/exclusions.csv
+│   │   ├── server/server.log  server_status.json   ✱ 서버 원시 로그, 상태 덤프
+│   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점)
+│   ├── replay/<실행>/models/       ✱
+│   ├── dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
+│   └── live/                       ✱ 대시보드 실행형으로 돌린 시연 결과
+└── checkpoints/                    ✱
+```
 
 ---
 
@@ -153,19 +193,33 @@ websys-project-fedsec/
 
 ## 실행 환경
 
-- 실험은 **Kaggle GPU**에서 실행합니다.
-- Kaggle 결과는 세션이 끝나면 사라지므로, 끝나기 전에 내려받아 둡니다.
+- 본 실험 72회와 재실행은 **Apple MPS(Mac)**에서 실행했습니다. 실행마다 기기·torch 버전·커밋을 `env.json`에 남깁니다.
+- Kaggle GPU에서도 돌릴 수 있습니다 ([scripts/README.md](scripts/README.md#kaggle에서-실행)). Kaggle 결과는 세션이 끝나면 사라지므로 끝나기 전에 내려받아 둡니다.
 
 ---
 
 ## 시작하기
 
-각자 코드의 실행 방법은 `members/<이름>/README.md`를 보세요.
-
 ```bash
 git clone https://github.com/eseungq/websys-project-fedsec.git
 cd websys-project-fedsec
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[test]"
+pytest -q                              # 테스트
 ```
+
+CIFAR-10은 [data/README.md](data/README.md)대로 `data/`에 받아 둡니다. 명령은 모두 레포 루트에서 실행합니다.
+
+```bash
+python scripts/serve_web.py                                   # 대시보드 + 연합학습 서버 http://127.0.0.1:8765/
+python scripts/run_server_experiment.py --name demo --rounds 3 --env configs/env/delay.yaml --attack --aggregator median
+python scripts/run_matrix.py --dry-run                        # 본 실험 72회 상태
+python scripts/compare_matrix.py                              # 비교표·그래프
+python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --unmask 2   # 재실행
+python scripts/run_dlg.py --help                              # DLG
+```
+
+스크립트별 옵션과 결과 파일은 [scripts/README.md](scripts/README.md), 단계별 구현 내용과 결과는 [docs/stages/](docs/stages/README.md)에 있습니다.
 
 폴더 이름이 한글이므로 처음 한 번 git 설정을 해 둡니다.
 
@@ -304,6 +358,8 @@ git push
 2. 고른 코드를 `src/fedsec/`(엔진), `web/fl_server/`(Flask 서버)로 옮기는 PR을 만듭니다.
 3. `members/`는 지우지 않고 근거로 남깁니다.
 4. 머지된 코드로 기준 설정을 다시 확인합니다.
+
+→ 11/24 통합 결과는 [docs/통합.md](docs/통합.md)에 있습니다. 엔진은 `src/fedsec/`, Flask 서버는 `src/fedsec/server/`, 대시보드는 `web/fl_server/`에 들어갔습니다.
 
 ### 6. 커밋하지 않는 것
 CIFAR-10 데이터, 모델 파일(`*.pt`), 원시 로그, 노트북 출력, 과제 명세 PDF.
