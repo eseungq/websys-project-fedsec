@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.0984,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 58.5,
+  "first_round_sec": 4.117,
+  "mean_round_sec_after_first": 3.889,
+  "mean_comm_sec": 0.137,
+  "total_sec": 151.9,
+  "runner": "server",
+  "experiment": "replay/delay-attack-fedavg-s2-from000-unmask5",
+  "env": "delay",
+  "attack": true,
+  "seed": 2,
+  "aggregator": "fedavg",
+  "diverged_round": 40,
+  "rounds_completed": 39,
+  "final_test_acc": 0.0964,
+  "final_test_loss": 220031.9488
+}

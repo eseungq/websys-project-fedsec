@@ -19,7 +19,6 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 - [실험 설계](#실험-설계)
 - [실행 환경](#실행-환경)
 - [시작하기](#시작하기)
-- [팀과 역할](#팀과-역할)
 - [협업 규칙](#협업-규칙)
 - [참고 자료](#참고-자료)
 
@@ -160,7 +159,7 @@ websys-project-fedsec/
 │   │   ├── config.yaml  env.json  summary.json  rounds.csv  clients.csv  class_acc.csv  client_acc.csv
 │   │   ├── server/server_rounds.csv  server/exclusions.csv
 │   │   ├── server/server.log  server_status.json   ✱ 서버 원시 로그, 상태 덤프
-│   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점)
+│   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점, 원인 분석 출발 모델 12개만 커밋)
 │   ├── replay/<실행>/models/       ✱
 │   ├── dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
 │   └── live/                       ✱ 대시보드 실행형으로 돌린 시연 결과
@@ -219,7 +218,9 @@ python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 -
 python scripts/run_dlg.py --help                              # DLG
 ```
 
-스크립트별 옵션과 결과 파일은 [scripts/README.md](scripts/README.md), 단계별 구현 내용과 결과는 [docs/stages/](docs/stages/README.md)에 있습니다.
+자세한 설치·실행 방법은 [설치·실행 설명서](docs/manuals/install.md), API는 [API 설명서](docs/manuals/api.md), 설정 파일은 [입력 파일 설명서](docs/manuals/input_files.md)에 있습니다. 스크립트별 결과 파일은 [scripts/README.md](scripts/README.md), 단계별 구현 내용과 결과는 [docs/stages/](docs/stages/README.md)에 있습니다.
+
+**결과:** 본 실험 비교표는 [experiments/matrix/_tables/comparison.md](experiments/matrix/_tables/comparison.md), 원인 분석 3건과 방어 권고 2건은 [reports/analysis/원인분석.md](reports/analysis/원인분석.md)에 있습니다.
 
 폴더 이름이 한글이므로 처음 한 번 git 설정을 해 둡니다.
 
@@ -227,17 +228,6 @@ python scripts/run_dlg.py --help                              # DLG
 git config --global core.precomposeunicode true   # macOS: 자모 분리로 같은 이름이 다른 폴더가 되는 문제 방지
 git config --global core.quotepath false          # git status에 한글이 \354… 로 보일 때
 ```
-
----
-
-## 팀과 역할
-
-| 이름 | 역할 |
-|---|---|
-| 조준협 | 미정 |
-| 안태현 | 미정 |
-| 배병욱 | 미정 |
-| 이승규 | 미정 |
 
 ---
 

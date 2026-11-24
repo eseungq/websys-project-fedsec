@@ -1,0 +1,12 @@
+{
+  "experiment": "replay/delay-attack-fedavg-s1-from005-unmask1",
+  "env": "delay",
+  "attack": true,
+  "seed": 1,
+  "aggregator": "fedavg",
+  "diverged_round": 6,
+  "rounds_completed": 0,
+  "final_val_acc": null,
+  "final_test_acc": 0.1,
+  "final_test_loss": 1177104.384
+}

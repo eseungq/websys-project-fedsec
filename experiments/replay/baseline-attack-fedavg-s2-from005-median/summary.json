@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.6914,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 35.0,
+  "first_round_sec": 4.078,
+  "mean_round_sec_after_first": 3.896,
+  "mean_comm_sec": 0.156,
+  "total_sec": 136.5,
+  "runner": "server",
+  "experiment": "replay/baseline-attack-fedavg-s2-from005-median",
+  "env": "baseline",
+  "attack": true,
+  "seed": 2,
+  "aggregator": "median",
+  "diverged_round": null,
+  "rounds_completed": 35,
+  "final_test_acc": 0.6928,
+  "final_test_loss": 0.9778
+}

@@ -2,7 +2,7 @@
 
 구성 출처: McMahan et al., AISTATS 2017. 공개 코드 https://github.com/AshwinRJ/Federated-Learning-PyTorch
 (`src/utils.py`의 `average_weights`, `src/federated_main.py`). 코드를 가져오지 않고 명세에 맞춰 새로 작성했다.
-달라진 점 (자세한 표는 docs/2_서버-API.md):
+달라진 점 (자세한 표는 docs/stages/2_서버-API.md):
 - 원 코드는 로컬 가중치 자체를 단순 평균한다. 여기서는 업데이트(차이)를 표본 수에 비례해 평균하고 전역 가중치에 더한다
 - 입력 텐서를 바꾸지 않고 새 상태를 돌려준다 (원 코드는 첫 클라이언트 가중치 복사본에 더해 나간다)
 """

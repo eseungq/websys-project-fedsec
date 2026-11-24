@@ -1,0 +1,21 @@
+{
+  "source": "matrix/baseline-attack-fedavg-s0",
+  "from_round": 5,
+  "start_round": 6,
+  "rounds": 35,
+  "checkpoint": "experiments/matrix/baseline-attack-fedavg-s0/models/round_005.pt",
+  "change": {
+    "unmask": [
+      2
+    ]
+  },
+  "unmasked": [
+    2
+  ],
+  "source_summary": {
+    "final_test_acc": 0.1,
+    "final_val_acc": 0.0992,
+    "diverged_round": 13,
+    "rounds_completed": 12
+  }
+}
