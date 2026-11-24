@@ -1,7 +1,8 @@
 # 모델 역추적(DLG) 결과와 노이즈 수준 제안
 
 - 실험: 2026-11-19, 이승규 (CPU, `scripts/run_dlg.py`)
-- 상태: **반영**. 노이즈 없음·작음·큼(σ 0, 1e-2, 1e-1)을 `configs/dlg.yaml`에 넣었습니다 (11/19). 아래 탐색 범위는 `--sigmas`로 다시 돌릴 수 있습니다.
+- 상태: 완료
+- 결과: σ 0 / 1e-2 / 1e-1 → MSE 0.00005 이하 / 0.05\~0.08(dog 정체 제외) / 0.26\~0.31. `configs/dlg.yaml`에 반영 (11/19), 다른 σ는 `--sigmas`로 다시 돌림
 
 ---
 
@@ -166,5 +167,5 @@ truck(1)의 궤적 (`experiments/3_dlg/iterations/trajectory.csv`, 1000회 실�
 
 - 다시 실행할 때 기준은 각 폴더의 `config.yaml`입니다. `configs/dlg.yaml` 기본값은 실험 뒤 σ 3개로 바뀌었으므로, 위 명령처럼 당시 값을 옵션으로 줍니다
 - 기존 폴더는 그대로 두고 `*_rerun` 폴더에 새로 만듭니다 (같은 이름이면 `run_dlg.py`가 멈춤). 두 폴더의 `results.csv`를 비교하면 재현 여부를 확인할 수 있습니다
-- 폴더맙니다 `config.yaml`(실제로 쓴 설정), `env.json`, `results.csv`(조합당 1줄), `trajectory.csv`(10회마다), `summary.png`(원본 | σ별 복원). 복원 PNG는 `dlg_images/`(git 무시)
+- 폴더마다 `config.yaml`(실제로 쓴 설정), `env.json`, `results.csv`(조합당 1줄), `trajectory.csv`(10회마다), `summary.png`(원본 | σ별 복원). 원본·복원 PNG 낱장은 `dlg_images/`(커밋함, 대시보드 DLG 탭이 읽음)
 - `results.csv` 열: `image_index, label, class, sigma, grad_sq_norm, iterations, iterations_done, diverged, mse, mse_unclipped, max_abs_pixel, grad_diff, noise_sq_norm, grad_diff_over_noise, pred_label, label_correct, seconds`

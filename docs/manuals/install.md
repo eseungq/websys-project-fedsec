@@ -104,6 +104,5 @@ websys-project-fedsec/
 │   │   ├── server/server.log  server_status.json   ✱ 서버 원시 로그, 상태 덤프
 │   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점, 원인 분석 출발 모델 12개만 커밋)
 │   ├── 6_replay/<실행>/models/       ✱
-│   ├── 3_dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
 │   └── live/                       ✱ 대시보드 실행형으로 돌린 시연 결과
 ```

@@ -6,7 +6,7 @@
 예) python scripts/run_dlg.py --name sweep_sigma
     python scripts/run_dlg.py --name it1000 --sigmas 0.01 --iterations 100 300 1000
 결과: experiments/3_dlg/<name>/ 에 config.yaml, env.json, results.csv, trajectory.csv,
-      summary.png, dlg_images/(복원 PNG, git 무시)
+      summary.png, dlg_images/(원본·복원 PNG, 대시보드 DLG 탭이 읽음)
 """
 
 import argparse
