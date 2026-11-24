@@ -369,6 +369,8 @@ async function pollStatus() {
 function showLiveRun(status, running) {
   // 진행 중이거나, 한 라운드도 못 끝내고 멈춘 실행(상세 결과가 없음)은 상태 응답으로 그린다
   if (running || status.rounds_done === 0) {
+    selectedRunId = status.run_id;
+    openSeq += 1;   // 대기 중인 이전 결과 상세 응답이 이 화면을 덮지 않게
     renderRun({ id: status.run_id, summary: status.summary, plan: status.plan, replay: null, rounds: status.rounds,
       clients: status.clients, class_acc: [], client_acc: [], exclusions: [] }, { live: true, running });
     setText("real-time", `${status.elapsed_sec.toFixed(1)}s`);
