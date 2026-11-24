@@ -8,12 +8,13 @@
  "diverged_round": 8,
  "final_val_acc": 10.5,
  "final_test_acc": 10.0,
- "final_test_loss": NaN,
+ "final_test_loss": null,
  "malicious": [
   4,
   8
  ],
  "delayed": [],
  "virtual_elapsed": 9.337,
- "real_sec": 103.73
+ "real_sec": 103.73,
+ "stop_reason": "val_loss_non_finite"
 }

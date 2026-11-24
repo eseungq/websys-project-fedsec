@@ -8,7 +8,7 @@
  "diverged_round": 17,
  "final_val_acc": 10.36,
  "final_test_acc": 10.0,
- "final_test_loss": Infinity,
+ "final_test_loss": null,
  "malicious": [
   4,
   8
@@ -19,5 +19,6 @@
   7
  ],
  "virtual_elapsed": 51.0,
- "real_sec": 206.38
+ "real_sec": 206.38,
+ "stop_reason": "val_loss_non_finite"
 }

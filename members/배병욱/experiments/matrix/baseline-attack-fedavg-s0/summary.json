@@ -15,5 +15,6 @@
  ],
  "delayed": [],
  "virtual_elapsed": 11.871,
- "real_sec": 294.04
+ "real_sec": 294.04,
+ "stop_reason": "all_submissions_non_finite"
 }
