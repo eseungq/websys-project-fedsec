@@ -374,7 +374,8 @@ function showLiveRun(status, running) {
     renderRun({ id: status.run_id, summary: status.summary, plan: status.plan, replay: null, rounds: status.rounds,
       clients: status.clients, class_acc: [], client_acc: [], exclusions: [] }, { live: true, running });
     setText("real-time", `${status.elapsed_sec.toFixed(1)}s`);
-  } else if (selectedRunId !== status.run_id && status.rounds_done > 0) {
+  } else if (status.rounds_done > 0 && (selectedRunId !== status.run_id || liveRunId === null)) {
+    // 끝 처리가 남은 실행(liveRunId)은 pollStatus의 완료 처리가 열므로 중복으로 열지 않는다
     openRun(status.run_id);
   }
 }
