@@ -19,7 +19,6 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 - [실험 설계](#실험-설계)
 - [실행 환경](#실행-환경)
 - [시작하기](#시작하기)
-- [팀과 역할](#팀과-역할)
 - [협업 규칙](#협업-규칙)
 - [참고 자료](#참고-자료)
 
@@ -229,17 +228,6 @@ python scripts/run_dlg.py --help                              # DLG
 git config --global core.precomposeunicode true   # macOS: 자모 분리로 같은 이름이 다른 폴더가 되는 문제 방지
 git config --global core.quotepath false          # git status에 한글이 \354… 로 보일 때
 ```
-
----
-
-## 팀과 역할
-
-| 이름 | 역할 |
-|---|---|
-| 조준협 | 미정 |
-| 안태현 | 미정 |
-| 배병욱 | 미정 |
-| 이승규 | 미정 |
 
 ---
 
