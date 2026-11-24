@@ -151,9 +151,9 @@ async function loadDlg() {
   else fillRows("dlg-tbody", [], "experiments/dlg/에 결과가 없습니다.", 8);
 }
 
-function dlgImage(runId, name, alt) {
+function dlgImage(runId, name, alt, className = "dlg-thumb") {
   if (!name) return el("span", { className: "helper-text", text: "없음" });
-  return el("img", { className: "dlg-thumb", attrs: { src: `/api/dlg/${encodeURIComponent(runId)}/images/${encodeURIComponent(name)}`, alt } });
+  return el("img", { className, attrs: { src: `/api/dlg/${encodeURIComponent(runId)}/images/${encodeURIComponent(name)}`, alt } });
 }
 
 function renderDlgRun(runId) {
@@ -175,12 +175,36 @@ function renderDlgRun(runId) {
   const bars = clear(byId("dlg-mse-bars"));
   bars.appendChild(barRows("막대는 로그 눈금 (10⁻⁶ ~ 1), 값은 이미지 평균 MSE", items));
 
-  const summary = clear(byId("dlg-summary"));
-  if (run.has_summary) {
-    summary.appendChild(el("div", { className: "section-subtitle", text: "summary.png (윗줄 원본, 아래는 σ별 복원)" }));
-    summary.appendChild(el("img", { className: "dlg-summary-img dlg-summary-large",
-      attrs: { src: `/api/dlg/${encodeURIComponent(run.id)}/images/summary.png`, alt: `${run.id} 원본·복원 요약` } }));
-  }
+  renderDlgGallery(run);
+}
+
+// 이미지마다 한 줄: 원본 | σ별 복원 (낱장 이미지 + 아래 설명)
+function dlgCard(runId, name, alt, captions) {
+  return el("figure", { className: "dlg-card" }, [
+    dlgImage(runId, name, alt, "dlg-card-img"),
+    el("figcaption", {}, captions.map((text) => el("div", { text }))),
+  ]);
+}
+
+function renderDlgGallery(run) {
+  const gallery = clear(byId("dlg-summary"));
+  const indices = [...new Set(run.results.map((r) => r.image_index))];
+  if (!indices.length) return;
+  const manyIterations = new Set(run.results.map((r) => r.iterations)).size > 1;
+  gallery.appendChild(el("div", { className: "section-subtitle", text: "원본과 복원 이미지" }));
+  indices.forEach((index) => {
+    const rows = run.results.filter((r) => r.image_index === index);
+    const first = rows[0];
+    const recon = rows.map((r) => dlgCard(run.id, r.reconstructed, `복원 ${index} σ=${r.sigma}`, [
+      `σ = ${r.sigma}`,
+      ...(manyIterations ? [`반복 ${r.iterations}`] : []),
+      isNum(r.mse) ? `MSE ${r.mse.toPrecision(3)}` : "MSE -",
+    ]));
+    gallery.appendChild(el("div", { className: "dlg-gallery-row" }, [
+      dlgCard(run.id, first.original, `원본 ${index}`, ["original", `#${index} ${first.class ?? first.label}`]),
+      el("div", { className: "dlg-gallery-recon" }, recon),
+    ]));
+  });
 }
 
 // ---- 비교표 탭 ----
