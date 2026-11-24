@@ -20,7 +20,7 @@ let pollTimer = null;      // 다음 상태 조회 예약 (setTimeout). 조회�
 let pollSeq = 0;           // 상태 조회 번호: 나중에 보낸 조회가 있으면 늦게 온 이전 응답은 버린다
 let openSeq = 0;           // 결과 상세 조회 번호: 빠르게 다른 결과를 고르면 이전 응답은 버린다
 let currentMode = "browse";
-let liveWasRunning = false;
+let liveRunId = null;      // 시작했거나 실행 중으로 본 실행 중 아직 끝 처리를 안 한 것
 let statusReadFailed = false;
 let dlgRuns = [];
 
@@ -115,11 +115,11 @@ async function openRun(runId) {
   renderRunList();
   try {
     const detail = await api(`/api/runs/${encodePath(runId)}`);
-    if (seq !== openSeq) return;
+    if (seq !== openSeq || selectedRunId !== runId) return;
     renderRun(detail, { live: runId.startsWith("live/") });
     document.querySelector('.tab-btn[data-tab="tab-trends"]').click();
   } catch (err) {
-    if (seq !== openSeq) return;
+    if (seq !== openSeq || selectedRunId !== runId) return;
     setText("view-title", `결과를 읽지 못했습니다: ${err.message}`);
   }
 }
@@ -267,6 +267,7 @@ async function startLive() {
   try {
     const started = await api("/api/start", body);
     selectedRunId = started.run_id;
+    liveRunId = started.run_id;   // 첫 응답이 이미 완료여도 끝 처리를 하도록
     document.querySelector('.tab-btn[data-tab="tab-trends"]').click();
     pollStatus();
   } catch (err) {
@@ -327,18 +328,26 @@ async function pollStatus() {
   renderLogTail(status);
   const running = status.state === "running";
   // 조회형으로 다른 결과를 보는 중이면 화면을 바꾸지 않는다 (상태 표시만 갱신)
-  if (currentMode === "live" && status.run_id && (running || selectedRunId === status.run_id)) {
+  if (currentMode === "live" && status.run_id) showLiveRun(status, running);
+  if (status.state === "error") showError(`실행이 오류로 끝났습니다 (코드 ${status.returncode}). 아래 출력을 확인하세요.`);
+  if (running) {
+    liveRunId = status.run_id;
+    schedulePoll(POLL_MS);
+  } else if (status.run_id && status.run_id === liveRunId) {
+    liveRunId = null;
+    await loadRuns();   // 끝난 실행을 목록에 넣고, 클래스별 정확도까지 있는 상세로 다시 그린다
+    // 목록을 읽는 동안 새 실행을 시작했으면 이전 실행을 열지 않는다
+    if (seq === pollSeq && liveRunId === null && currentMode === "live" && status.rounds_done > 0) openRun(status.run_id);
+  }
+}
+
+// 실행형 화면: 진행 중이면 상태 응답으로 그리고, 끝난 실행은 상세 결과로 연다 (조회형에서 고른 결과와 무관)
+function showLiveRun(status, running) {
+  if (running) {
     renderRun({ id: status.run_id, summary: status.summary, plan: status.plan, replay: null, rounds: status.rounds,
       clients: status.clients, class_acc: [], client_acc: [], exclusions: [] }, { live: true, running });
     setText("real-time", `${status.elapsed_sec.toFixed(1)}s`);
-  }
-  if (status.state === "error") showError(`실행이 오류로 끝났습니다 (코드 ${status.returncode}). 아래 출력을 확인하세요.`);
-  const finished = liveWasRunning && !running;
-  liveWasRunning = running;
-  if (running) {
-    schedulePoll(POLL_MS);
-  } else if (finished) {
-    await loadRuns();   // 끝난 실행을 목록에 넣고, 클래스별 정확도까지 있는 상세로 다시 그린다
-    if (status.rounds_done > 0 && currentMode === "live") openRun(status.run_id);
+  } else if (selectedRunId !== status.run_id && status.rounds_done > 0) {
+    openRun(status.run_id);
   }
 }
