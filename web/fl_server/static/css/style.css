@@ -836,9 +836,15 @@ body {
   margin-top: 12px;
 }
 
+/* DLG summary.png는 256px 원본이라 2배로 키움 (pixelated라 흐려지지 않음) */
+.dlg-summary-img.dlg-summary-large {
+  width: min(100%, 512px);
+}
+
+/* CIFAR 32×32 이미지를 3배로 */
 .dlg-thumb {
-  width: 48px;
-  height: 48px;
+  width: 96px;
+  height: 96px;
   image-rendering: pixelated;
   border: 1px solid var(--border-color);
   border-radius: 4px;

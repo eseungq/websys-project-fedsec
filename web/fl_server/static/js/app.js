@@ -178,7 +178,7 @@ function renderDlgRun(runId) {
   const summary = clear(byId("dlg-summary"));
   if (run.has_summary) {
     summary.appendChild(el("div", { className: "section-subtitle", text: "summary.png (윗줄 원본, 아래는 σ별 복원)" }));
-    summary.appendChild(el("img", { className: "dlg-summary-img",
+    summary.appendChild(el("img", { className: "dlg-summary-img dlg-summary-large",
       attrs: { src: `/api/dlg/${encodeURIComponent(run.id)}/images/summary.png`, alt: `${run.id} 원본·복원 요약` } }));
   }
 }
