@@ -5,7 +5,7 @@
 
 예) python scripts/run_dlg.py --name sweep_sigma
     python scripts/run_dlg.py --name it1000 --sigmas 0.01 --iterations 100 300 1000
-결과: experiments/dlg/<name>/ 에 config.yaml, env.json, results.csv, trajectory.csv,
+결과: experiments/3_dlg/<name>/ 에 config.yaml, env.json, results.csv, trajectory.csv,
       summary.png, dlg_images/(복원 PNG, git 무시)
 """
 
@@ -191,7 +191,7 @@ def write_summary_png(cfg: DLGConfig, results: list[dict], out_dir: Path) -> Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--name", required=True, help="결과 폴더 이름 (experiments/dlg/<name>)")
+    parser.add_argument("--name", required=True, help="결과 폴더 이름 (experiments/3_dlg/<name>)")
     parser.add_argument("--config", default="configs/dlg.yaml", help="레포 루트 기준 상대 경로 또는 절대 경로")
     parser.add_argument("--sigmas", type=float, nargs="+", help="설정의 σ 목록 대신 사용")
     parser.add_argument("--iterations", type=int, nargs="+", help="설정의 반복 횟수 목록 대신 사용")
@@ -199,7 +199,7 @@ def main() -> None:
     parser.add_argument("--dummy-seed", type=int, dest="dummy_seed", help="복원 시작 더미 초기값 시드만 바꿀 때")
     args = parser.parse_args()
 
-    out_dir = new_out_dir(args.name, base=ROOT / "experiments" / "dlg")
+    out_dir = new_out_dir(args.name, base=ROOT / "experiments" / "3_dlg")
     cfg = load_dlg_config(ROOT / args.config)
     overrides = {k: tuple(getattr(args, k)) for k in ("sigmas", "iterations", "images") if getattr(args, k) is not None}
     if args.dummy_seed is not None:

@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.7382,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 40.0,
+  "first_round_sec": 3.995,
+  "mean_round_sec_after_first": 3.893,
+  "mean_comm_sec": 0.151,
+  "total_sec": 155.8,
+  "runner": "server",
+  "experiment": "4_main/label_skew-normal-clip_fedavg-s2",
+  "env": "label_skew",
+  "attack": false,
+  "seed": 2,
+  "aggregator": "clip_fedavg",
+  "diverged_round": null,
+  "rounds_completed": 40,
+  "final_test_acc": 0.7437,
+  "final_test_loss": 0.7661
+}

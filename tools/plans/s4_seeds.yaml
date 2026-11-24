@@ -1,4 +1,4 @@
-# S4. 시드 확인: 상위 2개 설정 × 시드 1, 2 (시드 0은 lr0.01_r50, sweep/wd5e-4 재사용)
+# S4. 시드 확인: 상위 2개 설정 × 시드 1, 2 (시드 0은 lr0.01_r50, 1_setup/sweep/wd5e-4 재사용)
 # 공통: momentum 0.9, lr 0.01, local_ep 1, local_bs 32
 common: {rounds: 50, momentum: 0.9, lr: 0.01, local_ep: 1, local_bs: 32}
 runs:

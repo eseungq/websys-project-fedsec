@@ -1,0 +1,7 @@
+experiment,round,train_loss,val_loss,val_acc,norm_min,norm_mean,norm_max,num_selected,num_accepted,num_late,malicious_selected,malicious_accepted,overall_malicious_ratio,accepted_malicious_ratio,model_updated,skip_reason,num_excluded,attack_applied,updated,aggregator,aggregate_norm,virtual_elapsed,train_sec,comm_sec,total_sec
+4_main/delay-attack-fedavg-s0,1,2.1611,2.3096,0.0674,1.6196,1.7611,1.8186,10,7,3,2,2,0.2,0.2857,True,,3,True,True,fedavg,1.4261,1.5,3.827,0.146,4.087
+4_main/delay-attack-fedavg-s0,2,2.2027,2.3209,0.0966,1.5002,1.5705,1.6657,10,7,3,2,2,0.2,0.2857,True,,3,True,True,fedavg,1.3069,1.5,3.676,0.136,3.911
+4_main/delay-attack-fedavg-s0,3,2.3001,2.3665,0.0894,0.5942,0.6693,0.7305,10,7,3,2,2,0.2,0.2857,True,,3,True,True,fedavg,0.4846,1.5,3.666,0.134,3.898
+4_main/delay-attack-fedavg-s0,4,2.3104,2.9834,0.0818,0.607,0.6701,0.7138,10,7,3,2,2,0.2,0.2857,True,,3,True,True,fedavg,0.5032,1.5,3.669,0.131,3.897
+4_main/delay-attack-fedavg-s0,5,2.3269,51.0426,0.0764,1.3482,1.473,1.6682,10,7,3,2,2,0.2,0.2857,True,,3,True,True,fedavg,1.2926,1.5,3.668,0.133,3.896
+4_main/delay-attack-fedavg-s0,6,2.6693,559312.7936,0.0958,14.316,16.0465,18.0294,10,7,3,2,2,0.2,0.2857,True,,3,True,True,fedavg,12.1575,1.5,3.669,0.133,3.895

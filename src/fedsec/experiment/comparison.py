@@ -12,7 +12,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-FINISHED = ("done", "diverged")   # run_matrix.FINISHED와 같음
+FINISHED = ("done", "diverged")   # run_main.FINISHED와 같음
 DEFENSES = ("clip_fedavg", "median")
 DEFENSE_NAMES = {"clip_fedavg": "클리핑", "median": "중앙값"}
 CONDITIONS = tuple((attack, agg) for attack in ("normal", "attack") for agg in ("fedavg", *DEFENSES))
@@ -83,10 +83,10 @@ def _whole(row: dict, key: str) -> int:
 def _parse_result(row: dict, rounds: int) -> RunResult:
     name, status = _field(row, "name"), _field(row, "status")
     if status not in FINISHED:
-        raise ValueError(f"끝나지 않은 실행입니다 ({status or '상태 없음'}): {name} → run_matrix.py로 마저 실행")
+        raise ValueError(f"끝나지 않은 실행입니다 ({status or '상태 없음'}): {name} → run_main.py로 마저 실행")
     diverged = _diverged_round(row)
     _check_rounds(row, diverged, rounds)
-    # run_matrix.py는 1라운드 집계 직후 발산(평가할 모델 없음)만 diverged로 두고 정확도를 비운다.
+    # run_main.py는 1라운드 집계 직후 발산(평가할 모델 없음)만 diverged로 두고 정확도를 비운다.
     # 발산 전 모델로 평가한 실행(2라운드 이후 발산)은 done
     accuracies = {key: _field(row, key) for key in ("final_val_acc", "final_test_acc")}
     if status == "diverged":
@@ -100,7 +100,7 @@ def _parse_result(row: dict, rounds: int) -> RunResult:
 
 
 def _check_rounds(row: dict, diverged: int | None, rounds: int) -> None:
-    """run_matrix.diverged_problems와 같은 기준: 발산은 공격 실험만, 1~목표 라운드, 완료 라운드 = 발산 − 1."""
+    """run_main.diverged_problems와 같은 기준: 발산은 공격 실험만, 1~목표 라운드, 완료 라운드 = 발산 − 1."""
     name, completed = _field(row, "name"), _whole(row, "rounds_completed")
     if diverged is None:
         if completed != rounds:

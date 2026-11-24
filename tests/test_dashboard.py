@@ -1,4 +1,4 @@
-"""웹 대시보드(web/fl_server): 결과 폴더 찾기·읽기, 비교표, DLG, 경로 거부, /api/start 검증, 한 번에 한 실행.
+"""웹 대시보드(web/): 결과 폴더 찾기·읽기, 비교표, DLG, 경로 거부, /api/start 검증, 한 번에 한 실행.
 
 실제 학습은 하지 않는다 (하위 프로세스는 가짜 Popen).
 """
@@ -16,8 +16,8 @@ from fedsec.environments.config import load_env_config
 from fedsec.experiment.config import load_attack_defense, load_config
 from fedsec.server.app import create_app
 from fedsec.server.state import ServerState
-from web.fl_server.dashboard import create_dashboard
-from web.fl_server.live import (
+from web.routes import create_dashboard
+from web.run import (
     LazyServerLog,
     LiveRunner,
     StateHolder,
@@ -48,21 +48,21 @@ def make_run(run_dir: Path, summary: dict, rounds: int = 2) -> None:
 @pytest.fixture
 def experiments(tmp_path: Path) -> Path:
     base = tmp_path / "experiments"
-    make_run(base / "matrix" / "baseline-attack-fedavg-s0",
+    make_run(base / "4_main" / "baseline-attack-fedavg-s0",
              {"env": "baseline", "attack": True, "aggregator": "fedavg", "seed": 0, "final_val_acc": 0.25,
               "final_test_acc": None, "diverged_round": 3})
-    make_run(base / "replay" / "r1", {"env": "baseline", "attack": True, "aggregator": "median", "seed": 0})
-    write(base / "replay" / "r1" / "replay.json",
-          json.dumps({"source": "matrix/baseline-attack-fedavg-s0", "from_round": 2, "change": {"aggregator": "median"}}))
-    write(base / "matrix" / "baseline-attack-fedavg-s0" / "models" / "nested" / "summary.json", "{}")
-    write(base / "matrix" / "_tables" / "comparison.csv",
+    make_run(base / "6_replay" / "r1", {"env": "baseline", "attack": True, "aggregator": "median", "seed": 0})
+    write(base / "6_replay" / "r1" / "replay.json",
+          json.dumps({"source": "4_main/baseline-attack-fedavg-s0", "from_round": 2, "change": {"aggregator": "median"}}))
+    write(base / "4_main" / "baseline-attack-fedavg-s0" / "models" / "nested" / "summary.json", "{}")
+    write(base / "4_main" / "_tables" / "comparison.csv",
           "env,metric,defense,seed,value_pp,reference_pp,diverged_rounds\n"
           "baseline,attack_damage,,0,,66.16,13\nbaseline,attack_damage,,1,,66.43,11\n"
           "baseline,normal_loss,median,0,0.25,0.25,\nbaseline,normal_loss,median,1,0.15,0.15,\n")
-    write(base / "matrix" / "_tables" / "accuracy.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>")
-    write(base / "matrix" / "runs.csv", "name,env,attack,aggregator,seed,status,final_test_acc,diverged_round\n"
+    write(base / "4_main" / "_tables" / "accuracy.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>")
+    write(base / "4_main" / "runs.csv", "name,env,attack,aggregator,seed,status,final_test_acc,diverged_round\n"
                                         "a,baseline,normal,fedavg,0,done,0.7616,\nb,baseline,attack,fedavg,0,diverged,0.1,13\n")
-    dlg = base / "dlg" / "sweep"
+    dlg = base / "3_dlg" / "sweep"
     write(dlg / "results.csv", "image_index,label,class,sigma,iterations,mse,label_correct\n"
                                "1,9,truck,0.0,300,0.0001,True\n1,9,truck,0.01,300,0.05,True\n")
     write(dlg / "config.yaml", "client: 0\nimages: [1]\nsigmas: [0.0, 0.01]\niterations: [300]\n")
@@ -126,17 +126,17 @@ def test_runs_discovers_summary_folders_including_replay_and_skips_models(setup)
     runs = data_of(client.get("/api/runs"))["data"]
 
     ids = [run["id"] for run in runs]
-    assert ids == ["matrix/baseline-attack-fedavg-s0", "replay/r1"]
-    replay = next(run for run in runs if run["id"] == "replay/r1")
-    assert replay["replay"] == {"source": "matrix/baseline-attack-fedavg-s0", "from_round": 2,
+    assert ids == ["4_main/baseline-attack-fedavg-s0", "6_replay/r1"]
+    replay = next(run for run in runs if run["id"] == "6_replay/r1")
+    assert replay["replay"] == {"source": "4_main/baseline-attack-fedavg-s0", "from_round": 2,
                                 "change": {"aggregator": "median"}}
-    assert replay["group"] == "replay"
+    assert replay["group"] == "6_replay"
 
 
 def test_run_detail_returns_parsed_rounds_clients_and_last_class_acc(setup):
     client, _, _ = setup
 
-    detail = data_of(client.get("/api/runs/matrix/baseline-attack-fedavg-s0"))["data"]
+    detail = data_of(client.get("/api/runs/4_main/baseline-attack-fedavg-s0"))["data"]
 
     assert detail["summary"]["diverged_round"] == 3
     assert [row["round"] for row in detail["rounds"]] == [1, 2]
@@ -149,16 +149,16 @@ def test_run_detail_returns_parsed_rounds_clients_and_last_class_acc(setup):
 
 def test_run_detail_turns_nan_into_null(setup, experiments):
     client, _, _ = setup
-    write(experiments / "matrix" / "baseline-attack-fedavg-s0" / "summary.json", '{"final_val_acc": NaN}')
+    write(experiments / "4_main" / "baseline-attack-fedavg-s0" / "summary.json", '{"final_val_acc": NaN}')
 
-    response = client.get("/api/runs/matrix/baseline-attack-fedavg-s0")
+    response = client.get("/api/runs/4_main/baseline-attack-fedavg-s0")
 
     assert b"NaN" not in response.data
     assert data_of(response)["data"]["summary"]["final_val_acc"] is None
 
 
 @pytest.mark.parametrize("path", ["/api/runs/../secret.txt", "/api/runs/..%2Fsecret.txt", "/api/runs/%2E%2E/%2E%2E/etc",
-                                  "/api/runs/matrix/baseline-attack-fedavg-s0/models/nested",
+                                  "/api/runs/4_main/baseline-attack-fedavg-s0/models/nested",
                                   "/api/dlg/..%2F..%2Fsecret.txt/images/summary.png",
                                   "/api/dlg/sweep/images/..%2F..%2F..%2Fsecret.txt",
                                   "/api/dlg/sweep/images/config.yaml"])
@@ -174,7 +174,7 @@ def test_paths_outside_results_are_rejected(setup, path):
 def test_missing_run_is_404(setup):
     client, _, _ = setup
 
-    response = client.get("/api/runs/matrix/nope")
+    response = client.get("/api/runs/4_main/nope")
 
     assert response.status_code == 404
     assert data_of(response)["ok"] is False
@@ -240,7 +240,7 @@ def test_browse_mode_does_not_write_into_experiments(setup, experiments):
     client, _, _ = setup
     before = sorted(p.as_posix() for p in experiments.rglob("*"))
 
-    for path in ("/api/runs", "/api/runs/replay/r1", "/api/comparison", "/api/dlg", "/api/status"):
+    for path in ("/api/runs", "/api/runs/6_replay/r1", "/api/comparison", "/api/dlg", "/api/status"):
         client.get(path)
 
     assert sorted(p.as_posix() for p in experiments.rglob("*")) == before

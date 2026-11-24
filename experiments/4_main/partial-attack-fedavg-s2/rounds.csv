@@ -1,0 +1,13 @@
+experiment,round,train_loss,val_loss,val_acc,norm_min,norm_mean,norm_max,num_selected,num_accepted,num_late,malicious_selected,malicious_accepted,overall_malicious_ratio,accepted_malicious_ratio,model_updated,skip_reason,num_excluded,attack_applied,updated,aggregator,aggregate_norm,virtual_elapsed,train_sec,comm_sec,total_sec
+4_main/partial-attack-fedavg-s2,1,2.1452,2.3026,0.102,1.7319,1.7823,1.8059,5,5,0,1,1,0.2,0.2,True,,0,True,True,fedavg,0.8427,1.0,1.998,0.082,2.183
+4_main/partial-attack-fedavg-s2,2,2.1697,2.3148,0.0956,1.6151,1.6912,1.7377,5,5,0,2,2,0.2,0.4,True,,0,True,True,fedavg,2.3055,1.0,1.835,0.077,2.0
+4_main/partial-attack-fedavg-s2,3,2.2673,2.361,0.1014,1.0514,1.226,1.3172,5,5,0,2,2,0.2,0.4,True,,0,True,True,fedavg,1.7152,1.0,1.921,0.078,2.088
+4_main/partial-attack-fedavg-s2,4,2.2641,2.0517,0.2394,1.3124,1.4253,1.4875,5,5,0,0,0,0.2,0.0,True,,0,False,True,fedavg,1.3811,1.0,1.834,0.078,2.006
+4_main/partial-attack-fedavg-s2,5,1.9817,1.7761,0.338,1.7064,1.7894,1.8282,5,5,0,0,0,0.2,0.0,True,,0,False,True,fedavg,1.6819,1.0,1.836,0.079,2.005
+4_main/partial-attack-fedavg-s2,6,1.7438,1.9937,0.275,1.717,1.7422,1.7747,5,5,0,1,1,0.2,0.2,True,,0,True,True,fedavg,1.0067,1.0,1.836,0.079,2.01
+4_main/partial-attack-fedavg-s2,7,1.8002,1.6203,0.406,1.759,1.7938,1.8349,5,5,0,0,0,0.2,0.0,True,,0,False,True,fedavg,1.6261,1.0,1.832,0.079,2.005
+4_main/partial-attack-fedavg-s2,8,1.632,1.5131,0.4456,1.5148,1.6215,1.7018,5,5,0,0,0,0.2,0.0,True,,0,False,True,fedavg,1.311,1.0,1.836,0.08,2.009
+4_main/partial-attack-fedavg-s2,9,1.5451,2.0255,0.301,1.519,1.5891,1.6676,5,5,0,2,2,0.2,0.4,True,,0,True,True,fedavg,2.3055,1.0,1.83,0.08,2.002
+4_main/partial-attack-fedavg-s2,10,1.6863,2.3749,0.274,1.6939,1.7557,1.8117,5,5,0,1,1,0.2,0.2,True,,0,True,True,fedavg,1.1881,1.0,1.822,0.081,1.994
+4_main/partial-attack-fedavg-s2,11,1.7512,31.0968,0.1262,1.9011,1.9532,2.0176,5,5,0,2,2,0.2,0.4,True,,0,True,True,fedavg,2.8563,1.0,1.814,0.082,1.988
+4_main/partial-attack-fedavg-s2,12,2.5638,2645758.7712,0.1028,10.1069,12.3068,15.4504,5,5,0,2,2,0.2,0.4,True,,0,True,True,fedavg,19.5644,1.0,1.827,0.081,1.995

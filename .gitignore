@@ -38,9 +38,9 @@ members/*/data/*
 experiments/**/server/server.log
 experiments/**/server_status.json
 
-# 대시보드 실행형(scripts/serve_web.py)의 시연 결과
+# 대시보드 실행형(web/app.py)의 시연 결과
 experiments/live/
 
 # 원인 분석 재실험(reports/analysis/원인분석.md)의 출발 모델만 커밋 (명세: 재실행에 필요한 모델 상태)
-!experiments/matrix/baseline-attack-fedavg-s[012]/models/round_00[05].pt
-!experiments/matrix/delay-attack-fedavg-s[012]/models/round_00[05].pt
+!experiments/4_main/baseline-attack-fedavg-s[012]/models/round_00[05].pt
+!experiments/4_main/delay-attack-fedavg-s[012]/models/round_00[05].pt

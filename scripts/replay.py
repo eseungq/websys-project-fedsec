@@ -9,10 +9,10 @@
   --aggregator NAME  방어(집계) 방식만 교체
   --no-attack        공격 전체 해제
 
-예) python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --unmask 2
-    python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --aggregator median
-    python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --same   # 재현 확인
-결과: experiments/replay/<name>/ (run_server_experiment.py와 같은 파일 + replay.json)
+예) python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --unmask 2
+    python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --aggregator median
+    python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --same   # 재현 확인
+결과: experiments/6_replay/<name>/ (run_server_experiment.py와 같은 파일 + replay.json)
 
 재실행 방식은 배병욱 PR #9의 fedsim.replay(체크포인트에서 조건 하나만 바꿔 재실행)를 참고해 이 엔진에 맞게 새로 작성했다.
 """
@@ -45,7 +45,7 @@ from fedsec.experiment.config import (
 )
 from fedsec.server.app import HOST
 
-REPLAY_DIR = "replay"
+REPLAY_DIR = "6_replay"
 # 원래 실행과 같아야 하는 학습 설정 (config.yaml 최상위 키). rounds는 재실행 길이라 빼고, split은 환경 파일과 따로 대조
 SAME_KEYS = ("seed", "data_root", "model", "train", "eval_bs")
 
@@ -57,7 +57,7 @@ def load_source(run_dir: Path) -> dict:
         sys.exit(f"끝난 실행 폴더가 아닙니다 (config.yaml, summary.json 필요): {run_dir.relative_to(ROOT)}")
     saved = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if saved.get("runner") != "server":
-        sys.exit("서버 경유 실행(run_server_experiment.py, run_matrix.py)의 결과만 재실행할 수 있습니다.")
+        sys.exit("서버 경유 실행(run_server_experiment.py, run_main.py)의 결과만 재실행할 수 있습니다.")
     return {"config": saved, "summary": json.loads(summary_path.read_text(encoding="utf-8"))}
 
 
@@ -145,7 +145,7 @@ def server_command(cfg: ExperimentConfig, saved: dict, attack_defense: AttackDef
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--run", required=True, help="원래 실행 폴더 (experiments/ 기준, 예: matrix/baseline-attack-fedavg-s0)")
+    parser.add_argument("--run", required=True, help="원래 실행 폴더 (experiments/ 기준, 예: 4_main/baseline-attack-fedavg-s0)")
     parser.add_argument("--from-round", type=int, required=True, dest="from_round",
                         help="이 라운드 집계 후 모델(models/round_XXX.pt)에서 출발")
     parser.add_argument("--rounds", type=int, help="몇 라운드 돌릴지 (기본: 원래 실행의 마지막 라운드까지)")

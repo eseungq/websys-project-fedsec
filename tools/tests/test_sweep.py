@@ -81,7 +81,7 @@ def test_build_command_uses_sweep_folder_and_dashed_flags():
 
     cmd = build_command("py", run)
 
-    assert cmd == ["py", "scripts/run_experiment.py", "--name", "sweep/wd",
+    assert cmd == ["py", "scripts/run_experiment.py", "--name", "1_setup/sweep/wd",
                    "--weight-decay", "0.0005", "--local-ep", "2"]
 
 
@@ -176,7 +176,7 @@ def test_run_sweep_runs_in_order_then_skips_finished_runs(root):
     second = run_sweep(runs, root, sys.executable)
 
     assert (first, second) == (0, 0)
-    assert calls(root) == ["sweep/a", "sweep/b"]          # 두 번째는 모두 건너뜀
+    assert calls(root) == ["1_setup/sweep/a", "1_setup/sweep/b"]          # 두 번째는 모두 건너뜀
 
 
 def test_run_sweep_stops_at_failed_run(root, capsys):
@@ -185,12 +185,12 @@ def test_run_sweep_stops_at_failed_run(root, capsys):
     result = run_sweep(runs, root, sys.executable)
 
     assert result == 1
-    assert calls(root) == ["sweep/a"]
+    assert calls(root) == ["1_setup/sweep/a"]
     assert "[2/3] fail 실패 (종료 코드 3)" in capsys.readouterr().out
 
 
 def test_run_sweep_stops_when_existing_result_has_other_settings(root, capsys):
-    out = root / "experiments" / "sweep" / "a"
+    out = root / "experiments" / "1_setup" / "sweep" / "a"
     out.mkdir(parents=True)
     (out / "config.yaml").write_text(yaml.safe_dump({"seed": 0, "train": {"lr": 0.5}}))
     (out / "summary.json").write_text("{}")
@@ -210,7 +210,7 @@ def test_run_sweep_stops_when_base_config_changed_after_run(root, capsys):
     result = run_sweep(runs, root, sys.executable)
 
     assert result == 1
-    assert calls(root) == ["sweep/a"]                              # 기존 결과를 완료로 치지 않음
+    assert calls(root) == ["1_setup/sweep/a"]                              # 기존 결과를 완료로 치지 않음
     assert "train.weight_decay: 지금 설정 0.0005, 기존 0.0" in capsys.readouterr().out
 
 
@@ -232,7 +232,7 @@ def test_run_sweep_dry_run_executes_nothing(root):
 
 @pytest.mark.parametrize("text", ["", "- 1\n", "train: 5\n"])
 def test_run_sweep_stops_on_malformed_saved_config(root, capsys, text):
-    out = root / "experiments" / "sweep" / "a"
+    out = root / "experiments" / "1_setup" / "sweep" / "a"
     out.mkdir(parents=True)
     (out / "config.yaml").write_text(text)
     (out / "summary.json").write_text("{}")

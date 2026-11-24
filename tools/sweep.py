@@ -2,7 +2,7 @@
 
 예) python tools/sweep.py tools/plans/s1.yaml
     python tools/sweep.py tools/plans/s1.yaml --dry-run      # 실행할 명령만 출력
-결과: experiments/sweep/<name>/
+결과: experiments/1_setup/sweep/<name>/
 - 끝난 실행(summary.json 있음)은 건너뛴다 → 중간에 끊겨도 같은 명령으로 이어서 실행.
   단, configs/base.yaml에 옵션을 덮어쓴 실제 설정이 기존 config.yaml과 다르면 멈춘다
 - configs/base.yaml은 시작할 때 한 번 읽는다 → 탐색 도중에 고치지 말 것
@@ -26,7 +26,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SWEEP_DIR = "sweep"
+SWEEP_DIR = "1_setup/sweep"
 BASE_CONFIG = "configs/base.yaml"      # run_experiment.py의 --config 기본값과 같음
 OPTIONS = ("seed", "rounds", "lr", "momentum", "weight_decay", "local_ep", "local_bs")
 INT_OPTIONS = ("seed", "rounds", "local_ep", "local_bs")

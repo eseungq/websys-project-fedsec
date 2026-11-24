@@ -1,6 +1,6 @@
 """결과 폴더 여러 개를 비교표(Markdown, CSV)로 만든다. 표준 라이브러리 + PyYAML만 쓴다.
 
-예) python tools/summarize.py experiments/sweep/[!_]*     # _tables(결과 표 폴더)는 빼고
+예) python tools/summarize.py experiments/1_setup/sweep/[!_]*     # _tables(결과 표 폴더)는 빼고
     python tools/summarize.py experiments/lr*_r50 --epochs 50 --md out.md --csv out.csv
 행은 last5_val(선택 기준) 높은 순. 테스트 정확도는 설정 선택에 쓰지 않으므로 표에 넣지 않는다.
 """

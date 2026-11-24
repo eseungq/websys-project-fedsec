@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import replay  # scripts/는 패키지가 아니라 경로로 불러온다
 
-SOURCE_RUN = ROOT / "experiments" / "matrix" / "baseline-attack-fedavg-s0"
+SOURCE_RUN = ROOT / "experiments" / "4_main" / "baseline-attack-fedavg-s0"
 
 
 def _server(state: dict, env, attack_defense, start_round: int = 1) -> FlaskApi:

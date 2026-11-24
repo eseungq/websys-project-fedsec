@@ -1,0 +1,52 @@
+seed: 1
+split: configs/splits/iid_seed0.json
+data_root: data
+rounds: 40
+model: simple_cnn
+train:
+  lr: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  local_ep: 1
+  local_bs: 32
+eval_bs: 1000
+num_clients: 10
+runner: server
+server_url: http://127.0.0.1:52800
+server:
+  config:
+    aggregator: fedavg
+    clip_before_median: false
+    clip_norm: 3.5
+    config_file: configs/base.yaml
+    deadline: 1.5
+    env: delay
+    env_file: configs/env/delay.yaml
+    model: simple_cnn
+    per_round: null
+    seed: 1
+  min_accepted: 3
+  aggregator: fedavg
+plan:
+  experiment_id: 4_main/delay-normal-fedavg-s1
+  env_name: delay
+  malicious:
+  - 1
+  - 4
+  delayed:
+  - 3
+  - 5
+  - 9
+  timing:
+    base_time: 1.0
+    base_samples: 4500
+    delay: 2.0
+    deadline: 1.5
+  per_round: null
+  min_accepted: 3
+  attack: false
+  attack_scale: -5.0
+  defense:
+    aggregator: fedavg
+    clip_norm: 3.5
+    clip_before_median: false

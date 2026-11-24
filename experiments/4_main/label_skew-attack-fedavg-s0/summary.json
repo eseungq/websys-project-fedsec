@@ -1,0 +1,19 @@
+{
+  "final_val_acc": 0.1028,
+  "rounds_not_updated": 0,
+  "total_virtual_time": 4.0,
+  "first_round_sec": 4.062,
+  "mean_round_sec_after_first": 3.922,
+  "mean_comm_sec": 0.145,
+  "total_sec": 15.8,
+  "runner": "server",
+  "experiment": "4_main/label_skew-attack-fedavg-s0",
+  "env": "label_skew",
+  "attack": true,
+  "seed": 0,
+  "aggregator": "fedavg",
+  "diverged_round": 5,
+  "rounds_completed": 4,
+  "final_test_acc": 0.1,
+  "final_test_loss": 17087.3984
+}

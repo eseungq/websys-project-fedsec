@@ -435,7 +435,7 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
     summary = {"experiment": plan.experiment_id, "env": plan.env_name, "attack": plan.attack, "seed": cfg.seed,
                "aggregator": status["aggregator"], "diverged_round": diverged_round, "rounds_completed": len(rows)}
     if not rows:
-        # 1라운드 집계 직후 전역 모델이 깨진 공격 실험: 비교표에 넣을 정확도가 없다 (run_matrix 상태 diverged)
+        # 1라운드 집계 직후 전역 모델이 깨진 공격 실험: 비교표에 넣을 정확도가 없다 (run_main 상태 diverged)
         # 재실행이 첫 라운드에 발산했으면 시작 모델(저장된 라운드 모델)이 발산 전 모델이라 테스트 정확도는 아래에서 잰다
         summary = {**summary, "final_val_acc": None, "final_test_acc": None}
     else:
@@ -447,7 +447,7 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
         log.log_class_acc(class_rows(snapshot.round - 1, "test", test_eval))
         log.log_client_acc(client_acc_rows(snapshot.round - 1, "test", test_eval, distributions))
     save_state(snapshot.state, out_dir / "models" / "final_model.pt")
-    log.write_summary(summary)   # 마지막에 쓴다: summary.json이 있으면 실행이 끝까지 간 것 (run_matrix 완료 판정)
+    log.write_summary(summary)   # 마지막에 쓴다: summary.json이 있으면 실행이 끝까지 간 것 (run_main 완료 판정)
     return summary
 
 
