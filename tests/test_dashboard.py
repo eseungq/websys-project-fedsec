@@ -341,6 +341,18 @@ def test_status_reports_progress_from_run_files(setup, experiments):
     assert done["state"] == "completed"
 
 
+def test_status_returns_client_rows_of_every_round(setup, experiments):
+    client, _, _ = setup
+    run_id = data_of(client.post("/api/start", json={"rounds": 2}))["data"]["run_id"]
+    make_run(experiments / run_id, {"final_val_acc": 0.5}, rounds=1)
+    with (experiments / run_id / "clients.csv").open("a", encoding="utf-8") as f:
+        f.write("x,2,0,False,True,True,,4500,1.6,1.6\n")
+
+    status = data_of(client.get("/api/status"))["data"]
+
+    assert [(row["round"], row["client"]) for row in status["clients"]] == [(1, 0), (1, 3), (2, 0)]
+
+
 def test_status_idle_before_any_run(setup):
     client, _, _ = setup
 

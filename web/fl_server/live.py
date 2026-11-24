@@ -224,9 +224,7 @@ class LiveRunner:
         code = run.process.poll()
         run_dir = self._experiments_dir / run.run_id
         rounds = read_csv(run_dir / "rounds.csv")
-        clients = read_csv(run_dir / "clients.csv")
         config = read_yaml(run_dir / "config.yaml") or {}
-        last_round = rounds[-1]["round"] if rounds else None
         return {
             "state": _state_name(code, run.stopped),
             "run_id": run.run_id,
@@ -236,7 +234,8 @@ class LiveRunner:
             "rounds_total": run.params.rounds,
             "rounds_done": len(rounds),
             "rounds": rounds,
-            "clients": [row for row in clients if row.get("round") == last_round],
+            # 실행형은 최대 MAX_ROUNDS × 클라이언트 10명이라 전부 보낸다 (화면은 조회형과 같이 라운드를 골라 그림)
+            "clients": read_csv(run_dir / "clients.csv"),
             "plan": config.get("plan") if isinstance(config.get("plan"), dict) else None,
             "summary": read_json(run_dir / "summary.json"),
             "server": {key: self._holder.status()[key] for key in ("round", "model_version", "pending")},

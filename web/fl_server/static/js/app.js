@@ -3,6 +3,7 @@
 "use strict";
 
 const POLL_MS = 1000;
+const POLL_RETRY_MS = 3000;   // 상태 조회가 실패했을 때 다시 시도하는 간격
 const STATUS_TEXT = { idle: "● 실행 대기", running: "◉ 실행 중", completed: "✓ 완료", stopped: "■ 중지됨", error: "▲ 오류" };
 const METRIC_COLUMNS = [
   { metric: "attack_damage", defense: "", label: "공격 피해" },
@@ -15,7 +16,12 @@ const MSE_LOG_MIN = -6;   // σ별 MSE 막대: 10^-6 ~ 10^0을 로그 눈금으�
 
 let allRuns = [];
 let selectedRunId = null;
-let pollTimer = null;
+let pollTimer = null;      // 다음 상태 조회 예약 (setTimeout). 조회는 하나씩만 돈다
+let pollSeq = 0;           // 상태 조회 번호: 나중에 보낸 조회가 있으면 늦게 온 이전 응답은 버린다
+let openSeq = 0;           // 결과 상세 조회 번호: 빠르게 다른 결과를 고르면 이전 응답은 버린다
+let currentMode = "browse";
+let liveWasRunning = false;
+let statusReadFailed = false;
 let dlgRuns = [];
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -44,6 +50,8 @@ function bindEvents() {
 }
 
 function setMode(mode) {
+  currentMode = mode;
+  if (mode === "live") pollStatus();   // 실행형으로 오면 진행 중인 실행을 바로 그린다
   document.querySelectorAll(".mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   byId("panel-browse").classList.toggle("hidden", mode !== "browse");
   byId("panel-live").classList.toggle("hidden", mode !== "live");
@@ -103,12 +111,15 @@ function renderRunList() {
 
 async function openRun(runId) {
   selectedRunId = runId;
+  const seq = ++openSeq;
   renderRunList();
   try {
     const detail = await api(`/api/runs/${encodePath(runId)}`);
+    if (seq !== openSeq) return;
     renderRun(detail, { live: runId.startsWith("live/") });
     document.querySelector('.tab-btn[data-tab="tab-trends"]').click();
   } catch (err) {
+    if (seq !== openSeq) return;
     setText("view-title", `결과를 읽지 못했습니다: ${err.message}`);
   }
 }
@@ -289,30 +300,45 @@ function renderLogTail(status) {
   box.classList.toggle("hidden", !show || !box.textContent);
 }
 
+function schedulePoll(delay) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(pollStatus, delay);
+}
+
 async function pollStatus() {
+  clearTimeout(pollTimer);
+  const seq = ++pollSeq;
   let status;
   try {
     status = await api("/api/status");
   } catch (err) {
-    showError(`상태를 읽지 못했습니다: ${err.message}`);
+    if (seq !== pollSeq) return;
+    statusReadFailed = true;
+    showError(`상태를 읽지 못했습니다: ${err.message} (잠시 뒤 다시 시도합니다)`);
+    schedulePoll(POLL_RETRY_MS);
     return;
+  }
+  if (seq !== pollSeq) return;
+  if (statusReadFailed) {
+    statusReadFailed = false;
+    showError("");
   }
   renderStatusPill(status);
   renderLogTail(status);
   const running = status.state === "running";
-  if (status.run_id && (running || selectedRunId === status.run_id)) {
-    setMode("live");
+  // 조회형으로 다른 결과를 보는 중이면 화면을 바꾸지 않는다 (상태 표시만 갱신)
+  if (currentMode === "live" && status.run_id && (running || selectedRunId === status.run_id)) {
     renderRun({ id: status.run_id, summary: status.summary, plan: status.plan, replay: null, rounds: status.rounds,
       clients: status.clients, class_acc: [], client_acc: [], exclusions: [] }, { live: true, running });
     setText("real-time", `${status.elapsed_sec.toFixed(1)}s`);
   }
   if (status.state === "error") showError(`실행이 오류로 끝났습니다 (코드 ${status.returncode}). 아래 출력을 확인하세요.`);
-  if (running && !pollTimer) {
-    pollTimer = setInterval(pollStatus, POLL_MS);
-  } else if (!running && pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
+  const finished = liveWasRunning && !running;
+  liveWasRunning = running;
+  if (running) {
+    schedulePoll(POLL_MS);
+  } else if (finished) {
     await loadRuns();   // 끝난 실행을 목록에 넣고, 클래스별 정확도까지 있는 상세로 다시 그린다
-    if (status.rounds_done > 0) openRun(status.run_id);
+    if (status.rounds_done > 0 && currentMode === "live") openRun(status.run_id);
   }
 }
