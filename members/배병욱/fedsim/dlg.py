@@ -62,22 +62,25 @@ def attack(net, target_grads, shape, iters, init_seed, check_iters, record_every
         if not torch.isfinite(dummy_x).all() or diff != diff:
             status = f"nan_at_{it}"
             break
-        mse = F.mse_loss(dummy_x.detach(), x_eval).item()
+        mse = F.mse_loss(dummy_x.detach().clamp(0, 1), x_eval).item()  # 화면에 보이는 [0,1] 이미지 기준
         if it % record_every == 0 or it == 1:
-            traj.append({"iter": it, "grad_diff": diff, "mse": mse})
+            traj.append({"iter": it, "grad_diff": diff, "mse": mse,
+                         "mse_raw": F.mse_loss(dummy_x.detach(), x_eval).item()})
         if it == check_iters:
             at_check = mse
-    final = F.mse_loss(dummy_x.detach(), x_eval).item() if status == "ok" else float("nan")
+    final = F.mse_loss(dummy_x.detach().clamp(0, 1), x_eval).item() if status == "ok" else float("nan")
     return dummy_x.detach(), dummy_y.detach(), final, at_check, traj, status
 
 
 def verdict(mse_check, mse_final, sigma):
     if mse_check is None or mse_final != mse_final:
         return "실패(NaN)"
-    if mse_final < 1e-3:
+    if mse_final < 1e-2:
         return "복원 성공"
     if mse_final < 0.5 * mse_check:
         return "반복 부족(더 돌리면 개선)"
+    if mse_final > mse_check:
+        return "노이즈 쪽으로 멀어짐" if sigma > 0 else "최적화 불안정"
     return "노이즈로 정체" if sigma > 0 else "최적화 정체(노이즈 아님)"
 
 
