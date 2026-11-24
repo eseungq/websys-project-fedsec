@@ -66,6 +66,8 @@ def label_skew_split(clients, labels, seed, skew=0.8, shards_per_client=2):
     pool = pool[rng.permutation(len(pool))]
 
     n_skew = int(round(size * skew))
+    if n_skew % shards_per_client:
+        raise ValueError(f"편향 표본 수 {n_skew}가 shards_per_client={shards_per_client}로 나누어떨어지지 않습니다")
     skew_part, rand_part = pool[: n_skew * n_clients], pool[n_skew * n_clients:]
     skew_part = skew_part[np.argsort(labels[skew_part], kind="stable")]
     shards = np.array_split(skew_part, n_clients * shards_per_client)

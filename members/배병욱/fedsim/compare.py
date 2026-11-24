@@ -98,9 +98,10 @@ def main():
     lines += ["", "## 발산", ""]
     for k, (s, _) in sorted(runs.items()):
         if s["diverged_round"]:
+            why = {"all_submissions_non_finite": "모든 제출이 NaN/Inf로 제외되어 중단",
+                   "val_loss_non_finite": "검증 손실이 NaN/Inf가 되어 중단"}.get(s.get("stop_reason"), "중단 사유 미기록")
             lines.append(f"- {k[0]} / {'공격' if k[1] else '정상'} / {k[2]} / 시드 {k[3]}: "
-                         f"{s['diverged_round']}라운드 발산 (모든 제출이 NaN/Inf로 제외되어 중단, "
-                         f"최종 정확도는 서버가 마지막으로 받아들인 모델 기준)")
+                         f"{s['diverged_round']}라운드 발산 ({why}, 최종 정확도는 서버가 마지막으로 받아들인 모델 기준)")
 
     lines += ["", "## 방어 진단 (공격 실행, 채택된 업데이트 기준)", "",
               "| 실행 | 클리핑 비율 정상 | 클리핑 비율 악성 | 중앙값 코사인 정상 | 중앙값 코사인 악성 |", "|---|---|---|---|---|"]

@@ -11,6 +11,7 @@ API
 """
 import argparse
 import json
+import math
 import time
 
 import torch
@@ -32,6 +33,7 @@ REASONS = {
     "bad_payload": "본문을 텐서로 읽을 수 없음",
     "bad_shape": "업데이트 길이가 전역 모델과 다름",
     "non_finite": "NaN 또는 Inf 포함",
+    "bad_virtual_finish": "virtual_finish가 없거나 유한한 숫자가 아님",
     "late": "가상 마감 시각 초과",
 }
 
@@ -74,7 +76,7 @@ def create_app():
 
     def _validate(meta, raw):
         cid = meta.get("client_id")
-        if not isinstance(cid, int) or not 0 <= cid < S["num_clients"]:
+        if type(cid) is not int or not 0 <= cid < S["num_clients"]:  # bool 거부
             return "unknown_client", None
         if meta.get("round") != S["round"]:
             return "wrong_round", None
@@ -86,7 +88,7 @@ def create_app():
             return "duplicate", None
         S["seen"].add(cid)
         ns = meta.get("num_samples")
-        if not isinstance(ns, int) or ns <= 0:
+        if type(ns) is not int or ns <= 0:
             return "bad_num_samples", None
         try:
             vec = from_bytes(raw).float()
@@ -96,7 +98,10 @@ def create_app():
             return "bad_shape", None
         if not torch.isfinite(vec).all():
             return "non_finite", None
-        if float(meta.get("virtual_finish", 0.0)) > S["schedule"].deadline:
+        vf = meta.get("virtual_finish")
+        if type(vf) not in (int, float) or not math.isfinite(vf):
+            return "bad_virtual_finish", None
+        if vf > S["schedule"].deadline:
             return "late", vec
         return None, vec
 

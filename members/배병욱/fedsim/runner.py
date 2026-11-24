@@ -29,6 +29,7 @@ from .serialization import from_bytes, to_bytes
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFENSES = ("fedavg", "clip_fedavg", "median")
+TIMEOUT = (5, 300)  # (연결, 읽기) 초. 실험 요청은 재시도하지 않는다
 _CACHE = {}
 
 
@@ -141,6 +142,15 @@ def local_train(model, x, y, idx, cfg, gen_seed):
             opt.step()
 
 
+def finite_or_none(v):
+    return v if isinstance(v, (int, float)) and np.isfinite(v) else None
+
+
+def write_json(path, obj):
+    with open(path, "w") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=1, allow_nan=False)
+
+
 def write_csv(path, rows):
     if not rows:
         return
@@ -186,91 +196,105 @@ def run_experiment(cfg, env, attack, defense, seed, out_dir, server_url, rounds=
     http = requests.Session()
     meta = {"aggregation": defense, "clip_bound": clip_bound, "min_accept": cfg["min_accept"],
             "num_clients": cfg["num_clients"], "schedule": sched_kw, "start_round": start_round}
-    http.post(server_url + "/reset", data=to_bytes(vec0), headers={"X-Meta": json.dumps(meta)}).raise_for_status()
+    http.post(server_url + "/reset", data=to_bytes(vec0), headers={"X-Meta": json.dumps(meta)},
+              timeout=TIMEOUT).raise_for_status()
 
     ckpt_dir = os.path.join(out_dir, "models")
     os.makedirs(ckpt_dir, exist_ok=True)
     round_rows, client_rows = [], []
-    virtual_elapsed, t_start, diverged_round = 0.0, time.time(), None
+    virtual_elapsed, t_start, diverged_round, stop_reason = 0.0, time.time(), None, None
 
-    for rnd in range(start_round, start_round + rounds):
-        t_round = time.time()
-        r = http.get(server_url + "/model")
-        r.raise_for_status()
-        gvec = from_bytes(r.content)
-        version = int(r.headers["X-Version"])
-        participants = json.loads(r.headers["X-Participants"])
-        assert int(r.headers["X-Round"]) == rnd
+    def save_logs():
+        write_csv(os.path.join(out_dir, "rounds.csv"), round_rows)
+        write_csv(os.path.join(out_dir, "clients.csv"), client_rows)
 
-        honest, train_sec = {}, {}
-        for cid in participants:  # 같은 라운드의 모든 클라이언트는 같은 전역 모델에서 시작
-            set_vector(model, gvec)
-            t0 = time.time()
-            local_train(model, xtr, ytr, client_t[cid], cfg, gen_seed=seed * 100003 + rnd * 101 + cid)
-            train_sec[cid] = time.time() - t0
-            honest[cid] = get_vector(model) - gvec
+    try:
+        for rnd in range(start_round, start_round + rounds):
+            t_round = time.time()
+            r = http.get(server_url + "/model", timeout=TIMEOUT)
+            r.raise_for_status()
+            gvec = from_bytes(r.content)
+            version = int(r.headers["X-Version"])
+            participants = json.loads(r.headers["X-Participants"])
+            assert int(r.headers["X-Round"]) == rnd
 
-        forged = collusion({c: honest[c] for c in participants if c in attackers}, cfg["attack_scale"])
-        submitted = {c: forged.get(c, honest[c]) for c in participants}
+            honest, train_sec = {}, {}
+            for cid in participants:  # 같은 라운드의 모든 클라이언트는 같은 전역 모델에서 시작
+                set_vector(model, gvec)
+                t0 = time.time()
+                local_train(model, xtr, ytr, client_t[cid], cfg, gen_seed=seed * 100003 + rnd * 101 + cid)
+                train_sec[cid] = time.time() - t0
+                honest[cid] = get_vector(model) - gvec
 
-        responses = {}
-        for cid in participants:
-            vf = sched.virtual_finish(cid, rnd)
-            m = {"client_id": cid, "round": rnd, "version": version, "num_samples": len(clients[cid]),
-                 "virtual_finish": vf}
-            resp = http.post(server_url + "/update", data=to_bytes(submitted[cid]), headers={"X-Meta": json.dumps(m)})
-            responses[cid] = (resp.json(), vf)
+            forged = collusion({c: honest[c] for c in participants if c in attackers}, cfg["attack_scale"])
+            submitted = {c: forged.get(c, honest[c]) for c in participants}
 
-        agg = http.post(server_url + "/aggregate").json()
-        r = http.get(server_url + "/model")
-        set_vector(model, from_bytes(r.content))
-        val_acc, val_loss, _ = evaluate(model, xtr[val_t], ytr[val_t])
+            responses = {}
+            for cid in participants:
+                vf = sched.virtual_finish(cid, rnd)
+                m = {"client_id": cid, "round": rnd, "version": version, "num_samples": len(clients[cid]),
+                     "virtual_finish": vf}
+                resp = http.post(server_url + "/update", data=to_bytes(submitted[cid]), headers={"X-Meta": json.dumps(m)},
+                                       timeout=TIMEOUT)
+                responses[cid] = (resp.json(), vf)
 
-        accepted = agg["accepted"]
-        n_late = sum(1 for c in participants if responses[c][0]["reason"] == "late")
-        mal_sel = [c for c in participants if c in sched.malicious]
-        mal_acc = [c for c in accepted if c in sched.malicious]
-        vf_all = [responses[c][1] for c in participants]
-        round_virtual = sched.deadline if n_late else max(vf_all)
-        virtual_elapsed += round_virtual
-        round_rows.append({
-            "round": rnd, "selected": len(participants), "accepted": len(accepted), "late_excluded": n_late,
-            "other_excluded": len(participants) - len(accepted) - n_late,
-            "malicious_selected": len(mal_sel), "malicious_accepted": len(mal_acc),
-            "overall_malicious_ratio": round(len(sched.malicious) / cfg["num_clients"], 4),
-            "accepted_malicious_ratio": round(len(mal_acc) / len(accepted), 4) if accepted else "N/A",
-            "updated": agg["updated"], "reason": agg["reason"], "aggregate_norm": agg.get("aggregate_norm", ""),
-            "val_acc": round(val_acc, 4), "val_loss": round(val_loss, 6),
-            "virtual_round_time": round(round_virtual, 4), "virtual_elapsed": round(virtual_elapsed, 4),
-            "real_round_sec": round(time.time() - t_round, 3),
-        })
-        for cid in participants:
-            res, vf = responses[cid]
-            client_rows.append({
-                "round": rnd, "client_id": cid, "malicious": cid in sched.malicious,
-                "attacked": cid in forged, "num_samples": len(clients[cid]),
-                "honest_norm": round(honest[cid].norm().item(), 6),
-                "submitted_norm": round(submitted[cid].norm().item(), 6),
-                "after_defense_norm": round(agg["after_defense_norm"].get(str(cid), float("nan")), 6)
-                if str(cid) in agg["after_defense_norm"] else "",
-                "cosine_to_median": round(agg.get("cosine_to_median", {}).get(str(cid), float("nan")), 6)
-                if str(cid) in agg.get("cosine_to_median", {}) else "",
-                "clipped": agg.get("clipped", {}).get(str(cid), ""),
-                "accepted": res["accepted"], "reason": res["reason"],
-                "virtual_finish": round(vf, 4), "real_train_sec": round(train_sec[cid], 3),
+            agg = http.post(server_url + "/aggregate", timeout=TIMEOUT).json()
+            r = http.get(server_url + "/model", timeout=TIMEOUT)
+            set_vector(model, from_bytes(r.content))
+            val_acc, val_loss, _ = evaluate(model, xtr[val_t], ytr[val_t])
+
+            accepted = agg["accepted"]
+            n_late = sum(1 for c in participants if responses[c][0]["reason"] == "late")
+            mal_sel = [c for c in participants if c in sched.malicious]
+            mal_acc = [c for c in accepted if c in sched.malicious]
+            vf_all = [responses[c][1] for c in participants]
+            round_virtual = sched.deadline if n_late else max(vf_all)
+            virtual_elapsed += round_virtual
+            round_rows.append({
+                "round": rnd, "selected": len(participants), "accepted": len(accepted), "late_excluded": n_late,
+                "other_excluded": len(participants) - len(accepted) - n_late,
+                "malicious_selected": len(mal_sel), "malicious_accepted": len(mal_acc),
+                "overall_malicious_ratio": round(len(sched.malicious) / cfg["num_clients"], 4),
+                "accepted_malicious_ratio": round(len(mal_acc) / len(accepted), 4) if accepted else "N/A",
+                "updated": agg["updated"], "reason": agg["reason"], "aggregate_norm": agg.get("aggregate_norm", ""),
+                "val_acc": round(val_acc, 4), "val_loss": round(val_loss, 6),
+                "virtual_round_time": round(round_virtual, 4), "virtual_elapsed": round(virtual_elapsed, 4),
+                "real_round_sec": round(time.time() - t_round, 3),
             })
-        log(f"  r{rnd:03d} acc={len(accepted)}/{len(participants)} upd={agg['updated']} "
-            f"val={val_acc:.2f}% loss={val_loss:.3f} {agg['reason']}")
+            for cid in participants:
+                res, vf = responses[cid]
+                client_rows.append({
+                    "round": rnd, "client_id": cid, "malicious": cid in sched.malicious,
+                    "attacked": cid in forged, "num_samples": len(clients[cid]),
+                    "honest_norm": round(honest[cid].norm().item(), 6),
+                    "submitted_norm": round(submitted[cid].norm().item(), 6),
+                    "after_defense_norm": round(agg["after_defense_norm"].get(str(cid), float("nan")), 6)
+                    if str(cid) in agg["after_defense_norm"] else "",
+                    "cosine_to_median": round(agg.get("cosine_to_median", {}).get(str(cid), float("nan")), 6)
+                    if str(cid) in agg.get("cosine_to_median", {}) else "",
+                    "clipped": agg.get("clipped", {}).get(str(cid), ""),
+                    "accepted": res["accepted"], "reason": res["reason"],
+                    "virtual_finish": round(vf, 4), "real_train_sec": round(train_sec[cid], 3),
+                })
+            log(f"  r{rnd:03d} acc={len(accepted)}/{len(participants)} upd={agg['updated']} "
+                f"val={val_acc:.2f}% loss={val_loss:.3f} {agg['reason']}")
 
-        if rnd % cfg["checkpoint_every"] == 0 or rnd == start_round + rounds - 1:
-            torch.save({"round": rnd, "vector": get_vector(model)}, os.path.join(ckpt_dir, f"round_{rnd:03d}.pt"))
+            if rnd % cfg["checkpoint_every"] == 0 or rnd == start_round + rounds - 1:
+                torch.save({"round": rnd, "vector": get_vector(model)}, os.path.join(ckpt_dir, f"round_{rnd:03d}.pt"))
 
-        # 모든 제출이 NaN/Inf로 제외되거나 검증 손실이 NaN이면 발산으로 보고 중단
-        reasons = [responses[c][0]["reason"] for c in participants]
-        if not np.isfinite(val_loss) or (reasons and all(x == "non_finite" for x in reasons)):
-            diverged_round = rnd
-            log(f"  발산: {rnd}라운드에서 중단")
-            break
+            # 모든 제출이 NaN/Inf로 제외되거나 검증 손실이 NaN이면 발산으로 보고 중단
+            reasons = [responses[c][0]["reason"] for c in participants]
+            all_nonfinite = bool(reasons) and all(x == "non_finite" for x in reasons)
+            if not np.isfinite(val_loss) or all_nonfinite:
+                diverged_round = rnd
+                stop_reason = "all_submissions_non_finite" if all_nonfinite else "val_loss_non_finite"
+                log(f"  발산: {rnd}라운드에서 중단")
+                break
+
+    except requests.RequestException as e:
+        save_logs()
+        write_json(os.path.join(out_dir, "failed.json"), {"error": repr(e), "rounds_done": len(round_rows)})
+        raise RuntimeError(f"서버 요청 실패, 부분 로그 저장: {out_dir}") from e
 
     test_acc, test_loss, test_cls = evaluate(model, xte, yte)
     client_acc = []
@@ -278,19 +302,18 @@ def run_experiment(cfg, env, attack, defense, seed, out_dir, server_url, rounds=
         a, _, _ = evaluate(model, xtr[idx], ytr[idx])
         client_acc.append({"client_id": cid, "malicious": cid in sched.malicious, "train_acc": round(a, 4)})
 
-    write_csv(os.path.join(out_dir, "rounds.csv"), round_rows)
-    write_csv(os.path.join(out_dir, "clients.csv"), client_rows)
+    save_logs()
     write_csv(os.path.join(out_dir, "class_acc.csv"),
               [{"class": i, "test_acc": round(a, 4)} for i, a in enumerate(test_cls)])
     write_csv(os.path.join(out_dir, "client_acc.csv"), client_acc)
     summary = {"env": env, "attack": attack, "defense": defense, "seed": seed,
                "rounds_planned": rounds, "rounds_done": len(round_rows), "diverged_round": diverged_round,
+               "stop_reason": stop_reason,
                "final_val_acc": round_rows[-1]["val_acc"] if round_rows else None,
-               "final_test_acc": round(test_acc, 4), "final_test_loss": test_loss,
+               "final_test_acc": round(test_acc, 4), "final_test_loss": finite_or_none(test_loss),
                "malicious": sched.malicious, "delayed": sched.delayed,
                "virtual_elapsed": round(virtual_elapsed, 3), "real_sec": round(time.time() - t_start, 2)}
-    with open(os.path.join(out_dir, "summary.json"), "w") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=1)
+    write_json(os.path.join(out_dir, "summary.json"), summary)
     return summary
 
 

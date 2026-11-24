@@ -95,6 +95,8 @@ def main():
     ap.add_argument("--line-search", default="strong_wolfe", choices=["strong_wolfe", "none"])
     ap.add_argument("--out", default="experiments/dlg")
     a = ap.parse_args()
+    if not 0 < a.check_iters < a.iters:
+        ap.error("0 < --check-iters < --iters 이어야 합니다")
     torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
 
     out = os.path.join(ROOT, a.out)

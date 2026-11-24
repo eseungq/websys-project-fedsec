@@ -32,14 +32,21 @@ def main():
     run_dir = os.path.join(ROOT, a.run) if not os.path.isabs(a.run) else a.run
     with open(os.path.join(run_dir, "config.json")) as f:
         orig = json.load(f)
-    ckpt = torch.load(os.path.join(run_dir, "models", f"round_{a.from_round:03d}.pt"), weights_only=True)
     cfg = orig["base"]
     if orig.get("clip_bound"):
         cfg["clip_bound"] = orig["clip_bound"]
     defense = a.defense or orig["defense"]
     attack = orig["attack"] and not a.no_attack
     end = orig["start_round"] + orig["rounds"] - 1
-    rounds = a.rounds or (end - a.from_round)
+    rounds = a.rounds if a.rounds is not None else end - a.from_round
+    if rounds <= 0:
+        ap.error(f"돌릴 라운드가 없습니다 (원래 끝 라운드 {end}, 출발 {a.from_round}, rounds={rounds})")
+    # 재실행 결과를 다시 재실행할 때 이전에 해제한 악성을 유지한다
+    disabled = sorted(set(orig.get("disabled_attackers", [])) | set(a.disable_attacker))
+    ckpt_path = os.path.join(run_dir, "models", f"round_{a.from_round:03d}.pt")
+    if not os.path.exists(ckpt_path):
+        ap.error(f"체크포인트가 없습니다: {os.path.relpath(ckpt_path, ROOT)}")
+    ckpt = torch.load(ckpt_path, weights_only=True)
 
     change = []
     if a.defense:
@@ -54,7 +61,7 @@ def main():
     try:
         s = run_experiment(cfg, orig["env"], attack, defense, orig["seed"], out, srv.url, rounds=rounds,
                            start_round=a.from_round + 1, init_vec=ckpt["vector"],
-                           disabled_attackers=a.disable_attacker)
+                           disabled_attackers=disabled)
     finally:
         srv.close()
     with open(os.path.join(run_dir, "summary.json")) as f:
