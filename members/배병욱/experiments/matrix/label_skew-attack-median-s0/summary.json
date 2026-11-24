@@ -1,0 +1,19 @@
+{
+ "env": "label_skew",
+ "attack": true,
+ "defense": "median",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 20,
+ "diverged_round": null,
+ "final_val_acc": 53.38,
+ "final_test_acc": 53.68,
+ "final_test_loss": 1.2721248413085937,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [],
+ "virtual_elapsed": 23.684,
+ "real_sec": 472.42
+}

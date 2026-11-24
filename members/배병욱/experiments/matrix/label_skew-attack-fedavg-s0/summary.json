@@ -1,0 +1,20 @@
+{
+ "env": "label_skew",
+ "attack": true,
+ "defense": "fedavg",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 5,
+ "diverged_round": 5,
+ "final_val_acc": 9.52,
+ "final_test_acc": 10.0,
+ "final_test_loss": null,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [],
+ "virtual_elapsed": 5.923,
+ "real_sec": 119.03,
+ "stop_reason": "val_loss_non_finite"
+}

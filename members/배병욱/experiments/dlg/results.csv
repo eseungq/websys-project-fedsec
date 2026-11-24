@@ -1,0 +1,9 @@
+image_idx,label,sigma,iters,mse_at_check,check_iters,mse_final,label_recovered,status,verdict,sec
+3,airplane,0.0,600,0.000614,300,0.000614,True,ok,복원 성공,18.5
+3,airplane,0.001,600,0.005319,300,0.005319,True,ok,복원 성공,16.9
+3,airplane,0.01,600,0.186625,300,0.186625,True,ok,노이즈로 정체,19.4
+3,airplane,0.1,600,0.283496,300,0.285145,True,ok,노이즈 쪽으로 멀어짐,25.9
+10,airplane,0.0,600,0.001261,300,0.001261,True,ok,복원 성공,19.3
+10,airplane,0.001,600,0.010507,300,0.010507,True,ok,노이즈로 정체,16.7
+10,airplane,0.01,600,0.217212,300,0.220431,True,ok,노이즈 쪽으로 멀어짐,24.3
+10,airplane,0.1,600,0.253549,300,0.25255,True,ok,노이즈로 정체,27.4

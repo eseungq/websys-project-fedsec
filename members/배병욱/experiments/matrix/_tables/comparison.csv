@@ -1,0 +1,9 @@
+env,seed,defense,normal_fedavg,attack_fedavg,attack_damage_pp,attack_defense,defense_gain_pp,normal_defense,normal_loss_pp
+baseline,0,clip_fedavg,73.58,10.0,63.58,64.97,54.97,73.58,0.0
+baseline,0,median,73.58,10.0,63.58,68.05,58.05,73.49,0.09000000000000341
+delay,0,clip_fedavg,72.5,10.0,62.5,58.11,48.11,72.49,0.010000000000005116
+delay,0,median,72.5,10.0,62.5,61.11,51.11,72.37,0.12999999999999545
+label_skew,0,clip_fedavg,67.99,10.0,57.989999999999995,44.53,34.53,67.99,0.0
+label_skew,0,median,67.99,10.0,57.989999999999995,53.68,43.68,65.94,2.049999999999997
+partial,0,clip_fedavg,72.53,10.0,62.53,65.96,55.959999999999994,72.53,0.0
+partial,0,median,72.53,10.0,62.53,67.9,57.900000000000006,72.28,0.25

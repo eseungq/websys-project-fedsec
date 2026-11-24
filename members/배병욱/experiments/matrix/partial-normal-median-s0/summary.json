@@ -1,0 +1,19 @@
+{
+ "env": "partial",
+ "attack": false,
+ "defense": "median",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 20,
+ "diverged_round": null,
+ "final_val_acc": 72.86,
+ "final_test_acc": 72.28,
+ "final_test_loss": 0.79716953125,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [],
+ "virtual_elapsed": 23.437,
+ "real_sec": 233.21
+}
