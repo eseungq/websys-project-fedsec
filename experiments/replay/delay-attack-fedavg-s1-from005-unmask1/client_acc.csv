@@ -1,0 +1,11 @@
+round,split,client,weighted_acc
+5,test,0,0.0924
+5,test,1,0.0978
+5,test,2,0.1024
+5,test,3,0.1027
+5,test,4,0.1042
+5,test,5,0.1004
+5,test,6,0.0898
+5,test,7,0.0976
+5,test,8,0.1091
+5,test,9,0.098

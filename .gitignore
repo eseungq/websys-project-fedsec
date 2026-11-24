@@ -19,7 +19,7 @@ checkpoints/*
 
 # 실험 결과: 요약(config, env, summary)만 커밋하고 원시 로그는 제외
 **/experiments/**/logs/
-**/experiments/**/models/
+**/experiments/**/models/*
 **/experiments/**/dlg_images/
 
 # 과제 명세 원본 (저작권·공개 전환 대비, 각자 로컬 보관)
@@ -40,3 +40,7 @@ experiments/**/server_status.json
 
 # 대시보드 실행형(scripts/serve_web.py)의 시연 결과
 experiments/live/
+
+# 원인 분석 재실험(reports/analysis/원인분석.md)의 출발 모델만 커밋 (명세: 재실행에 필요한 모델 상태)
+!experiments/matrix/baseline-attack-fedavg-s[012]/models/round_00[05].pt
+!experiments/matrix/delay-attack-fedavg-s[012]/models/round_00[05].pt
