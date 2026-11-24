@@ -231,3 +231,28 @@ def test_rebuild_stops_when_saved_setting_differs():
 
     with pytest.raises(SystemExit):
         replay.rebuild(changed, rounds=7, attack_defense=replay.source_attack_defense(saved))
+
+
+def test_rebuild_stops_when_timing_differs():
+    saved = yaml.safe_load((SOURCE_RUN / "config.yaml").read_text(encoding="utf-8"))
+    plan = {**saved["plan"], "timing": {**saved["plan"]["timing"], "deadline": 9.9}}
+
+    with pytest.raises(SystemExit):
+        replay.rebuild({**saved, "plan": plan}, rounds=7, attack_defense=replay.source_attack_defense(saved))
+
+
+def test_source_last_round_counts_from_start_round_of_a_replay():
+    saved = yaml.safe_load((SOURCE_RUN / "config.yaml").read_text(encoding="utf-8"))
+    replayed = {**saved, "rounds": 35, "server": {**saved["server"],
+                                                 "config": {**saved["server"]["config"], "start_round": 6}}}
+
+    assert replay.source_last_round(saved) == saved["rounds"]
+    assert replay.source_last_round(replayed) == 40
+
+
+def test_merged_unmask_keeps_attackers_unmasked_in_source_replay():
+    saved = {"plan": {"unmasked": [2]}}
+
+    assert replay.merged_unmask(saved, {"unmask": [3]}) == (2, 3)
+    assert replay.merged_unmask(saved, {}) == (2,)
+    assert replay.merged_unmask({"plan": {}}, {"unmask": [3]}) == (3,)

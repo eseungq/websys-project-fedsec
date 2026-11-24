@@ -80,12 +80,24 @@ def rebuild(saved: dict, rounds: int, attack_defense: AttackDefenseConfig) -> tu
     if now["split"] != saved["split"]:
         diffs.append("split")
     plan = client_plan("", env, attack_defense, cfg.seed, DEFAULT_NUM_CLIENTS)
-    for key in ("malicious", "delayed", "per_round", "min_accepted"):
-        if plan.to_dict()[key] != saved["plan"][key]:
+    planned = yaml.safe_load(yaml.safe_dump(plan.to_dict(), allow_unicode=True))
+    for key in ("malicious", "delayed", "per_round", "min_accepted", "timing"):
+        if planned[key] != saved["plan"].get(key):
             diffs.append(f"plan.{key}")
     if diffs:
         sys.exit(f"원래 실행과 지금 설정 파일이 다릅니다: {', '.join(diffs)}. 같은 조건으로 재실행할 수 없습니다.")
     return cfg, plan
+
+
+def source_last_round(saved: dict) -> int:
+    """원래 실행의 마지막 라운드 번호. 원래 실행이 재실행이면 시작 라운드가 1이 아니다."""
+    start = saved["server"]["config"].get("start_round", 1)
+    return start - 1 + saved["rounds"]
+
+
+def merged_unmask(saved: dict, change: dict) -> tuple[int, ...]:
+    """원래 실행(재실행 결과일 수 있음)에서 이미 해제한 악성과 이번에 해제할 악성을 합친다."""
+    return tuple(sorted(set(saved["plan"].get("unmasked", [])) | set(change.get("unmask", []))))
 
 
 def describe(args: argparse.Namespace, source_ad: AttackDefenseConfig) -> dict:
@@ -156,15 +168,19 @@ def main() -> None:
     if args.from_round < 0 or not model_path.exists():
         saved_rounds = sorted(int(p.stem.split("_")[1]) for p in (run_dir / "models").glob("round_*.pt"))
         sys.exit(f"라운드 {args.from_round}의 저장된 모델이 없습니다. 저장된 라운드: {saved_rounds}")
-    rounds = args.rounds if args.rounds is not None else saved["rounds"] - args.from_round
+    last_round = source_last_round(saved)
+    rounds = args.rounds if args.rounds is not None else last_round - args.from_round
     if rounds < 1:
-        sys.exit(f"돌릴 라운드가 없습니다 (원래 {saved['rounds']}라운드, 출발 {args.from_round}, --rounds {args.rounds}).")
+        sys.exit(f"돌릴 라운드가 없습니다 (원래 마지막 라운드 {last_round}, 출발 {args.from_round}, --rounds {args.rounds}).")
 
     attack_defense = source_ad.with_overrides(aggregator=args.aggregator, attack=False if args.no_attack else None)
     cfg, plan = rebuild(saved, rounds, attack_defense)
     name = args.name or f"{run_dir.name}-from{args.from_round:03d}-{change_label(change)}"
     out_dir = new_out_dir(f"{REPLAY_DIR}/{name}")
-    plan = replace(plan, experiment_id=f"{REPLAY_DIR}/{name}", unmasked=tuple(change.get("unmask", ())))
+    unmasked = merged_unmask(saved, change)
+    if unmasked and not attack_defense.attack:
+        unmasked = ()   # 공격을 끈 재실행에서는 해제할 조작이 없다
+    plan = replace(plan, experiment_id=f"{REPLAY_DIR}/{name}", unmasked=unmasked)
 
     server_dir = out_dir / "server"
     server_dir.mkdir(parents=True)
@@ -172,6 +188,7 @@ def main() -> None:
     info = {"source": run_dir.relative_to(EXPERIMENTS_DIR).as_posix(), "from_round": args.from_round,
             "start_round": start_round, "rounds": rounds,
             "checkpoint": model_path.relative_to(ROOT).as_posix(), "change": change,
+            "unmasked": list(unmasked),   # 원래 실행에서 이어받은 해제 포함
             "source_summary": {key: source["summary"].get(key)
                                for key in ("final_test_acc", "final_val_acc", "diverged_round", "rounds_completed")}}
     (out_dir / "replay.json").write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")

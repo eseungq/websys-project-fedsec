@@ -413,7 +413,8 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
             row, rows_by_client, next_snapshot, val_eval = run_round(api, model, snapshot, clients, val, cfg, plan,
                                                                      status["min_accepted"], device)
         except TrainingDiverged as error:
-            if not is_attack_result(error, len(rows), plan.attack):
+            # 완료한 라운드는 절대 번호로 센다: 재실행은 저장된 라운드 모델에서 시작하므로 첫 라운드도 초기 모델이 아니다
+            if not is_attack_result(error, round_idx - 1, plan.attack):
                 raise
             # 이 라운드는 기록하지 않고, 발산 전(지난 라운드 끝) 전역 모델로 결과를 남긴다
             diverged_round = round_idx
@@ -435,10 +436,11 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
                "aggregator": status["aggregator"], "diverged_round": diverged_round, "rounds_completed": len(rows)}
     if not rows:
         # 1라운드 집계 직후 전역 모델이 깨진 공격 실험: 비교표에 넣을 정확도가 없다 (run_matrix 상태 diverged)
+        # 재실행이 첫 라운드에 발산했으면 시작 모델(저장된 라운드 모델)이 발산 전 모델이라 테스트 정확도는 아래에서 잰다
         summary = {**summary, "final_val_acc": None, "final_test_acc": None}
     else:
         summary = {**_summary(rows), **summary}
-    if evaluate_test and rows:
+    if evaluate_test and (rows or start_round > 1):
         model.load_state_dict(snapshot.state)
         test_eval = evaluate_detailed(model, test, cfg.eval_bs)
         summary = {**summary, "final_test_acc": round(test_eval.acc, 4), "final_test_loss": round(test_eval.loss, 4)}
