@@ -14,12 +14,12 @@ Flask·REST 연합학습 보안 시뮬레이터(`fedsim`)를 처음부터 새로
 | 단계 | 구현 | 파일 |
 |---|---|---|
 | 1 | CIFAR-10 직접 로드(공식 배치 파일), 팀 공용 IID 분할, 클라이언트별 표본 수·클래스 분포 기록 | `fedsim/data.py` |
-| 2 | Flask 서버 + 순차 학습 가상 클라이언트 10개, REST로 모델 다운로드·업데이트 제출, 라운드·버전·ID 검증과 11가지 제외 사유 | `fedsim/server.py`, `fedsim/runner.py` |
+| 2 | Flask 서버 + 순차 학습 가상 클라이언트 10개, REST로 모델 다운로드·업데이트 제출, 라운드·버전·ID 검증과 12가지 제외 사유 | `fedsim/server.py`, `fedsim/runner.py` |
 | 3 | 협력 공격(참여 악성 정상 업데이트 평균 × −5, 1명이면 자기 것 × −5, 0명이면 없음), 노름 클리핑+FedAvg, 좌표별 중앙값(짝수면 가운데 두 값 평균), DLG + 가우시안 노이즈 | `fedsim/attacks.py`, `fedsim/aggregation.py`, `fedsim/dlg.py` |
 | 4 | 기준 / 지연(고정 3명, 가상 마감) / 부분 참여(5명) / 레이블 편향(같은 이미지·표본 수, 배정만 변경) | `fedsim/environment.py`, `fedsim/data.py` |
 | 5 | rounds·clients·class_acc·client_acc CSV, summary/config/env JSON, 5라운드마다 모델 저장, 비교표 | `fedsim/runner.py`, `fedsim/compare.py` |
 | 6 | 체크포인트 재실행 (조건 하나만 변경) | `fedsim/replay.py` |
-| 검증 | 집계·방어·공격·서버 검증 수치 예제 15개 | `tests/test_numeric.py` |
+| 검증 | 집계·방어·공격·서버 검증 수치 예제 17개 | `tests/test_numeric.py` |
 
 ## 실행 명령
 ```bash
@@ -46,7 +46,7 @@ python -m fedsim.replay --run experiments/matrix/baseline-attack-fedavg-s0 --fro
 | POST | `/update` | 본문: 업데이트, `X-Meta`: `client_id, round, version, num_samples, virtual_finish` → 채택 또는 제외 사유 |
 | POST | `/aggregate` | 채택분 집계. 3개 미만이면 갱신 안 함(`too_few_accepted`). 방어 후 노름·코사인·클리핑 여부 반환 |
 
-제외 사유: `bad_meta, unknown_client, wrong_round, stale_version, not_selected, duplicate, bad_num_samples, bad_payload, bad_shape, non_finite, late`
+제외 사유: `bad_meta, unknown_client, wrong_round, stale_version, not_selected, duplicate, bad_num_samples, bad_payload, bad_shape, non_finite, bad_virtual_finish, late`
 
 ## 설정 값
 | 항목 | 값 |
