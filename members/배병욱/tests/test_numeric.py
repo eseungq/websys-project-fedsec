@@ -84,6 +84,12 @@ class TestEnvironment(unittest.TestCase):
         self.assertEqual([len(c) for c in out], [20] * 10)
         self.assertEqual(sorted(sum(out, [])), list(range(200)))
 
+    def test_label_skew_rejects_uneven_shards(self):
+        labels = [i % 10 for i in range(8)]
+        clients = [[0, 1, 2, 3], [4, 5, 6, 7]]          # n_skew = round(4·0.8) = 3, 조각 2개로 안 나뉨
+        with self.assertRaises(ValueError):
+            label_skew_split(clients, labels, seed=0, skew=0.8, shards_per_client=2)
+
 
 class TestServer(unittest.TestCase):
     def setUp(self):
@@ -107,6 +113,12 @@ class TestServer(unittest.TestCase):
         self.assertEqual(self.submit(3, T(float("nan"), 1))["reason"], "non_finite")
         self.assertEqual(self.submit(4, T(1, 1), vf=9.0)["reason"], "late")
         self.assertEqual(self.submit(5, T(1, 1), ns=0)["reason"], "bad_num_samples")
+
+    def test_rejects_bool_and_bad_virtual_finish(self):
+        self.assertEqual(self.submit(True, T(1, 1))["reason"], "unknown_client")       # bool은 정수로 안 봄
+        self.assertEqual(self.submit(1, T(1, 1), ns=True)["reason"], "bad_num_samples")
+        self.assertEqual(self.submit(2, T(1, 1), vf=None)["reason"], "bad_virtual_finish")
+        self.assertEqual(self.submit(3, T(1, 1), vf="nan")["reason"], "bad_virtual_finish")
 
     def test_too_few_accepted_keeps_model(self):
         self.submit(0, T(1, 1))
