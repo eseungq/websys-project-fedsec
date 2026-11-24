@@ -11,6 +11,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+import torch
+
 from fedsec.aggregation.fedavg import apply_update, weighted_average
 from fedsec.aggregation.norms import update_norm
 from fedsec.experiment.runtime import set_seed
@@ -51,19 +53,42 @@ def initial_global_state(seed: int, model_name: str) -> State:
     return {key: value.detach().clone() for key, value in model.state_dict().items()}
 
 
+def load_global_state(path, reference: State) -> State:
+    """저장된 전역 모델(models/round_XXX.pt)을 읽는다. 재실행의 시작 모델로 쓴다.
+
+    weights_only=True로만 풀고, 키·shape·dtype이 reference(같은 설정의 초기 모델)와 같고 값이 모두 유한해야 한다.
+    """
+    loaded = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(loaded, dict) or not all(isinstance(v, torch.Tensor) for v in loaded.values()):
+        raise ValueError(f"모델 파일이 파라미터 이름 → 텐서 형식이 아닙니다: {path}")
+    if loaded.keys() != reference.keys():
+        raise ValueError(f"모델 파일의 파라미터 이름이 설정의 모델과 다릅니다: {path}")
+    wrong = [key for key in reference
+             if loaded[key].shape != reference[key].shape or loaded[key].dtype != reference[key].dtype]
+    if wrong:
+        raise ValueError(f"모델 파일의 shape·dtype이 설정의 모델과 다릅니다: {wrong[:3]}")
+    if not all(torch.isfinite(value).all() for value in loaded.values() if value.is_floating_point()):
+        raise ValueError(f"모델 파일에 NaN·inf가 있습니다 (발산한 라운드의 모델은 재실행 시작점으로 쓸 수 없음): {path}")
+    return {key: value.detach().clone() for key, value in loaded.items()}
+
+
 def _now() -> str:
     return datetime.now().isoformat(timespec="milliseconds")
 
 
 class ServerState:
     def __init__(self, global_state: State, num_clients: int, policy: ServerPolicy = ServerPolicy(),
-                 log: ServerLog | None = None, max_update_bytes: int = MAX_STATE_BYTES, config: dict | None = None):
-        """config: 시드·모델 이름 등 서버를 만든 설정. /status로 공개해 클라이언트 프로그램이 대조한다."""
+                 log: ServerLog | None = None, max_update_bytes: int = MAX_STATE_BYTES, config: dict | None = None,
+                 start_round: int = 1):
+        """config: 시드·모델 이름 등 서버를 만든 설정. /status로 공개해 클라이언트 프로그램이 대조한다.
+        start_round: 재실행(scripts/replay.py)에서 저장된 라운드 다음부터 시작할 때 쓴다. 모델 버전은 0부터 센다."""
         if num_clients <= 0:
             raise ValueError("num_clients는 1 이상이어야 합니다.")
         if policy.min_accepted < 1:
             raise ValueError("min_accepted는 1 이상이어야 합니다.")
-        self.round = 1
+        if type(start_round) is not int or start_round < 1:
+            raise ValueError("start_round는 1 이상의 정수여야 합니다.")
+        self.round = start_round
         self.model_version = 0
         self.global_state = {key: value.detach().cpu().clone() for key, value in global_state.items()}
         self.num_clients = num_clients

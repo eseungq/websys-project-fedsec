@@ -89,9 +89,19 @@ class ClientPlan:
     attack: bool
     attack_scale: float
     defense: dict           # 서버 설정과 대조할 방어 설정 (DEFENSE_KEYS)
+    unmasked: tuple[int, ...] = ()  # 재실행에서 조작만 해제한 악성 ID (악성 표시는 그대로, 정상 업데이트를 제출)
 
     def to_dict(self) -> dict:
-        return {**asdict(self), "malicious": list(self.malicious), "delayed": list(self.delayed)}
+        """unmasked는 재실행에서 해제했을 때만 남긴다 (기존 결과의 config.yaml과 비교가 어긋나지 않게)."""
+        data = {**asdict(self), "malicious": list(self.malicious), "delayed": list(self.delayed)}
+        if self.unmasked:
+            return {**data, "unmasked": list(self.unmasked)}
+        return {key: value for key, value in data.items() if key != "unmasked"}
+
+    @property
+    def attackers(self) -> tuple[int, ...]:
+        """실제로 공격 벡터를 제출하는 악성 ID (조작 해제한 ID는 뺀다)."""
+        return tuple(cid for cid in self.malicious if cid not in self.unmasked)
 
 
 def client_plan(experiment_id: str, env: EnvConfig, attack_defense: AttackDefenseConfig, seed: int,
@@ -176,8 +186,9 @@ def fetch_snapshot(api: ServerApi, device: torch.device, expected_round: int) ->
     return Snapshot(data["round"], data["model_version"], state, list(data["participants"]))
 
 
-def check_server(status: dict, cfg: ExperimentConfig, num_clients: int, plan: ClientPlan) -> None:
-    """서버가 같은 시드·모델·클라이언트 수·환경·참여·채택 규칙·방어 설정으로 처음 상태에서 시작했는지 확인한다."""
+def check_server(status: dict, cfg: ExperimentConfig, num_clients: int, plan: ClientPlan, start_round: int = 1) -> None:
+    """서버가 같은 시드·모델·클라이언트 수·환경·참여·채택 규칙·방어 설정으로 처음 상태(start_round, 버전 0)에서
+    시작했는지 확인한다."""
     server_cfg = status["config"]
     pairs = [("seed", server_cfg.get("seed"), cfg.seed), ("model", server_cfg.get("model"), cfg.model),
              ("num_clients", status["num_clients"], num_clients), ("env", server_cfg.get("env"), plan.env_name),
@@ -186,7 +197,7 @@ def check_server(status: dict, cfg: ExperimentConfig, num_clients: int, plan: Cl
              ("min_accepted", status["min_accepted"], plan.min_accepted),
              *[(key, server_cfg.get(key), plan.defense[key]) for key in DEFENSE_KEYS]]
     mismatches = [f"{name}: 서버 {theirs}, 클라이언트 {ours}" for name, theirs, ours in pairs if theirs != ours]
-    if status["round"] != 1 or status["model_version"] != 0:
+    if status["round"] != start_round or status["model_version"] != 0:
         mismatches.append(f"서버가 처음 상태가 아닙니다 (라운드 {status['round']}, 버전 {status['model_version']})")
     if mismatches:
         raise RuntimeError("서버 설정이 다릅니다: " + "; ".join(mismatches))
@@ -205,10 +216,11 @@ def train_participants(model: torch.nn.Module, snapshot: Snapshot, clients: list
 
 
 def updates_to_submit(normal: dict[int, State], plan: ClientPlan) -> dict[int, State]:
-    """공격을 켰으면 이번 라운드에 학습한 악성 전원의 정상 업데이트로 공모 벡터를 만들어 바꿔 끼운다."""
+    """공격을 켰으면 이번 라운드에 학습한 악성 참여자(조작 해제한 ID 제외)의 정상 업데이트로 공모 벡터를 만들어
+    바꿔 끼운다. 해제한 악성은 남은 악성의 공모에 끼지 않고 자기 정상 업데이트를 낸다."""
     if not plan.attack:
         return dict(normal)
-    return {**normal, **collusion_vectors(normal, plan.malicious, plan.attack_scale)}
+    return {**normal, **collusion_vectors(normal, plan.attackers, plan.attack_scale)}
 
 
 
@@ -339,7 +351,8 @@ def run_round(api: ServerApi, model: torch.nn.Module, snapshot: Snapshot, client
 
 
 def should_save(round_idx: int, rounds: int, save_every: int) -> bool:
-    """라운드 0(초기 모델), save_every의 배수, 마지막 라운드의 전역 모델을 저장한다."""
+    """라운드 0(초기 모델), save_every의 배수, 마지막 라운드(rounds)의 전역 모델을 저장한다.
+    재실행이면 rounds에 마지막 라운드 번호(시작 라운드 − 1 + 라운드 수)를 넘긴다."""
     return round_idx in (0, rounds) or (save_every > 0 and round_idx % save_every == 0)
 
 
@@ -363,11 +376,12 @@ def _load_data(cfg: ExperimentConfig, repo_root: Path, device: torch.device):
 
 
 def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_url: str, plan: ClientPlan,
-                evaluate_test: bool = False, save_every: int = DEFAULT_SAVE_EVERY) -> dict:
+                evaluate_test: bool = False, save_every: int = DEFAULT_SAVE_EVERY, start_round: int = 1) -> dict:
     """결과 폴더 형식은 run_fedavg와 같고, 서버 기록(server_status.json), 클래스별(class_acc.csv)·
     클라이언트별(client_acc.csv) 정확도, 라운드별 전역 모델(models/round_XXX.pt)을 더 남긴다.
 
     cfg.split은 환경의 분할 파일이어야 한다 (레이블 편향 환경은 다른 분할).
+    start_round > 1은 재실행: 서버가 저장된 모델로 그 라운드부터 시작해 있어야 하고, cfg.rounds만큼 더 돈다.
     """
     if save_every < 0:
         raise ValueError("save_every는 0 이상이어야 합니다.")
@@ -377,7 +391,7 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
     check_delay_setting({cid: len(data) for cid, data in enumerate(clients)}, plan.delayed, plan.timing)
     api = ServerApi(server_url)
     status = api.status()
-    check_server(status, cfg, len(clients), plan)
+    check_server(status, cfg, len(clients), plan, start_round)
 
     model = build_model(cfg.model).to(device)
     env = environment_info(device)
@@ -388,8 +402,9 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
           f"env={plan.env_name} attack={plan.attack} malicious={list(plan.malicious)} delayed={list(plan.delayed)}")
 
     distributions = [label_distribution(data.labels) for data in clients]
-    snapshot = fetch_snapshot(api, device, expected_round=1)
-    save_state(snapshot.state, checkpoint_path(out_dir, 0))
+    snapshot = fetch_snapshot(api, device, expected_round=start_round)
+    save_state(snapshot.state, checkpoint_path(out_dir, start_round - 1))
+    last_round = start_round - 1 + cfg.rounds
     rows = []
     diverged_round = None
     for _ in range(cfg.rounds):
@@ -410,7 +425,7 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
         log.log_clients(rows_by_client)
         log.log_class_acc(class_rows(round_idx, "val", val_eval))
         log.log_client_acc(client_acc_rows(round_idx, "val", val_eval, distributions))
-        if should_save(round_idx, cfg.rounds, save_every):
+        if should_save(round_idx, last_round, save_every):
             save_state(snapshot.state, checkpoint_path(out_dir, round_idx))
         rows.append(row)
         print(" ".join(f"{k}={row[k]}" for k in PRINT_KEYS))
@@ -427,8 +442,8 @@ def run_clients(cfg: ExperimentConfig, out_dir: Path, repo_root: Path, server_ur
         model.load_state_dict(snapshot.state)
         test_eval = evaluate_detailed(model, test, cfg.eval_bs)
         summary = {**summary, "final_test_acc": round(test_eval.acc, 4), "final_test_loss": round(test_eval.loss, 4)}
-        log.log_class_acc(class_rows(len(rows), "test", test_eval))
-        log.log_client_acc(client_acc_rows(len(rows), "test", test_eval, distributions))
+        log.log_class_acc(class_rows(snapshot.round - 1, "test", test_eval))
+        log.log_client_acc(client_acc_rows(snapshot.round - 1, "test", test_eval, distributions))
     save_state(snapshot.state, out_dir / "models" / "final_model.pt")
     log.write_summary(summary)   # 마지막에 쓴다: summary.json이 있으면 실행이 끝까지 간 것 (run_matrix 완료 판정)
     return summary

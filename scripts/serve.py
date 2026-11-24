@@ -19,7 +19,7 @@ from fedsec.experiment.config import load_config
 from fedsec.logger.server_log import ServerLog
 from fedsec.server.app import DEFAULT_PORT, HOST, create_app
 from fedsec.server.scenario import build_defense, scenario_policy
-from fedsec.server.state import ServerState, initial_global_state
+from fedsec.server.state import ServerState, initial_global_state, load_global_state
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,6 +39,10 @@ def main() -> None:
     parser.add_argument("--min-accepted", type=int, dest="min_accepted",
                         help="채택이 이 수보다 적으면 모델을 갱신하지 않음 (없으면 환경 파일 값)")
     parser.add_argument("--log-dir", help="server_rounds.csv, exclusions.csv를 쓸 폴더 (레포 루트 기준)")
+    parser.add_argument("--start-round", type=int, default=1, dest="start_round",
+                        help="재실행: 이 라운드부터 시작 (--init-model 필요, scripts/replay.py가 씀)")
+    parser.add_argument("--init-model", dest="init_model",
+                        help="재실행: 시작 전역 모델 파일 (experiments/ 아래 models/round_XXX.pt)")
     add_scenario_args(parser)
     args = parser.parse_args()
 
@@ -50,10 +54,18 @@ def main() -> None:
     # 결과 폴더와 같이 experiments/ 아래만 (절대 경로로 받아도 그 안이어야 함)
     log = ServerLog(inside(EXPERIMENTS_DIR, str((ROOT / args.log_dir).resolve()))) if args.log_dir else None
     defense = {key: value for key, value in attack_defense.to_dict().items() if not key.startswith("attack")}
-    state = ServerState(initial_global_state(cfg.seed, cfg.model), num_clients=args.num_clients, policy=policy, log=log,
+    if args.start_round > 1 and not args.init_model:
+        parser.error("--start-round가 1보다 크면 --init-model로 시작 모델을 줘야 합니다.")
+    start = initial_global_state(cfg.seed, cfg.model)
+    resume = {}
+    if args.init_model:
+        model_path = inside(EXPERIMENTS_DIR, str((ROOT / args.init_model).resolve()))
+        start = load_global_state(model_path, reference=start)
+        resume = {"start_round": args.start_round, "init_model": shown_path(str(model_path))}
+    state = ServerState(start, num_clients=args.num_clients, policy=policy, log=log, start_round=args.start_round,
                         config={"seed": cfg.seed, "model": cfg.model, "config_file": shown_path(args.config),
                                 "env": env.name, "env_file": shown_path(args.env), "per_round": env.per_round,
-                                "deadline": env.timing.deadline, **defense})
+                                "deadline": env.timing.deadline, **defense, **resume})
     print(f"server http://{HOST}:{args.port} seed={cfg.seed} model={cfg.model} clients={args.num_clients} "
           f"env={env.name} per_round={env.per_round} deadline={env.timing.deadline} "
           f"aggregator={policy.aggregator_name} min_accepted={policy.min_accepted}", flush=True)

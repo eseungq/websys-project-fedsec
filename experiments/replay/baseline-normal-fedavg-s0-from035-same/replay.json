@@ -1,0 +1,14 @@
+{
+  "source": "matrix/baseline-normal-fedavg-s0",
+  "from_round": 35,
+  "start_round": 36,
+  "rounds": 5,
+  "checkpoint": "experiments/matrix/baseline-normal-fedavg-s0/models/round_035.pt",
+  "change": {},
+  "source_summary": {
+    "final_test_acc": 0.7616,
+    "final_val_acc": 0.7638,
+    "diverged_round": null,
+    "rounds_completed": 40
+  }
+}
