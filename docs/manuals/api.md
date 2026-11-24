@@ -30,7 +30,7 @@ curl -s http://127.0.0.1:8765/status
 |---|---|---|
 | `GET /` | | 대시보드 화면 |
 | `GET /api/runs` | | 결과 폴더 목록: `id, group, env, attack, aggregator, seed, rounds_completed, final_val_acc, final_test_acc, diverged_round, replay` |
-| `GET /api/runs/<실행>` | `<실행>`은 `experiments/` 기준 경로 (예: `matrix/baseline-attack-fedavg-s0`) | `summary, config, plan, replay, rounds[], clients[], class_acc[], client_acc[], exclusions[]` |
+| `GET /api/runs/<실행>` | `<실행>`은 `experiments/` 기준 경로 (예: `4_main/baseline-attack-fedavg-s0`) | `summary, config, plan, replay, rounds[], clients[], class_acc[], client_acc[], exclusions[]` |
 | `GET /api/comparison` | | 본 실험 비교표: 공격 피해·방어 개선·정상 손실(시드별·평균, %p), 조건별 정확도 |
 | `GET /api/comparison/accuracy.svg` | | 정확도 막대그래프 |
 | `GET /api/dlg` | | DLG 실험 목록과 결과 (σ, 반복, MSE, 레이블 복원, 이미지 파일 이름) |

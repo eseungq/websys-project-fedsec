@@ -21,7 +21,7 @@ runs:
   - {name: m0.5_lr0.025, momentum: 0.5, lr: 0.025}
 ```
 - 바꿀 수 있는 값: `seed rounds lr momentum weight_decay local_ep local_bs`. 나머지는 `configs/base.yaml`.
-- 결과: `experiments/sweep/<name>/`
+- 결과: `experiments/1_setup/sweep/<name>/`
 - 끝난 실행(`summary.json` 있음)은 건너뜀 → 끊겨도 같은 명령으로 이어서 실행. 단, `configs/base.yaml`에 옵션을 덮어쓴 실제 설정이 기존 `config.yaml`과 다르면 멈춤(실행 목록에 없는 값이 `base.yaml`에서 바뀐 경우 포함).
 - 끊긴 실행(폴더만 있고 `summary.json` 없음)이 있으면 멈춤 → 그 폴더를 지우거나 옮긴 뒤 다시 실행.
 - `configs/base.yaml`은 시작할 때 한 번 읽고 확인합니다(옵티마이저는 `sgd`만). 탐색 도중에는 고치지 마세요.
@@ -30,12 +30,12 @@ runs:
 
 ## summarize.py
 ```bash
-python tools/summarize.py experiments/lr*_r50 experiments/sweep/m0.5_*
-python tools/summarize.py experiments/sweep/[!_]* --epochs 50 --md all.md --csv all.csv   # _tables 폴더는 빼고
+python tools/summarize.py experiments/lr*_r50 experiments/1_setup/sweep/m0.5_*
+python tools/summarize.py experiments/1_setup/sweep/[!_]* --epochs 50 --md all.md --csv all.csv   # _tables 폴더는 빼고
 ```
 행은 `last5_val` 높은 순. Markdown은 정확도를 %로, CSV는 원래 값(0\~1)으로 씁니다. 인자에는 실행 결과 폴더만 넘깁니다(`summary.json` 없는 폴더는 오류).
 
-테스트 정확도는 설정 선택에 쓰지 않으므로 표에 넣지 않습니다. (`experiments/sweep/_tables/`의 표는 이 변경 전에 만들어 `final_test` 열이 남아 있습니다.)
+테스트 정확도는 설정 선택에 쓰지 않으므로 표에 넣지 않습니다. (`experiments/1_setup/sweep/_tables/`의 표는 이 변경 전에 만들어 `final_test` 열이 남아 있습니다.)
 
 | 열 | 뜻 |
 |---|---|

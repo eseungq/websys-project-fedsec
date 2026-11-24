@@ -1,8 +1,8 @@
-# 이승규
+# 명세 단계별 문서
 
-11/24 대표 코드 선정 전까지 쓰는 개인 폴더입니다. 선정되면 레포 루트 `src/fedsec/` 등으로 머지됩니다.
+명세 1\~5단계의 구현 내용·결과·한계를 단계마다 적은 문서입니다. 6단계 원인 분석은 [reports/analysis/원인분석.md](../../reports/analysis/원인분석.md)에 있습니다.
 
-**현재 상태 (11/20):** 명세 1\~4단계 구현과 4단계 본 실험 72회, 5단계 로그 기록·비교표·그래프 끝. 남은 것은 5단계 라운드 재실행 도구와 6단계 원인 분석입니다.
+**현재 상태 (11/24):** 명세 1\~6단계 모두 끝. 남은 것은 정량 평가 보고서 정리와 발표자료입니다.
 
 ## 명세 단계별 요약
 단계마다 구현 내용과 결과를 짧게 적고, 자세한 내용은 문서로 연결합니다. 문서는 명세 문장을 그대로 제목으로 두고 그 아래에 "구현 내용 / 결과"를 적었습니다.
@@ -24,7 +24,7 @@
   - 기준 환경 40라운드 최종 테스트 정확도(시드 0\~2 평균): 정상 FedAvg 76.22%, 공격 + FedAvg는 세 시드 모두 발산(11\~17라운드), 공격 + 클리핑 67.46%, 공격 + 중앙값 69.15%. 정상 손실은 클리핑 −0.04, 중앙값 +0.09%p
 
 ### 4. 운영 환경별 비교 실험 → [4_운영환경.md](4_운영환경.md)
-- **구현 내용:** 환경 4개(기준, 지연 3명, 부분 참여 5명, 레이블 편향 α 0.5)를 기준에서 한 항목씩만 바꿈. 환경 4 × (정상, 공격) × (FedAvg, 클리핑, 중앙값) × 시드 3개 = 72회 일괄 실행(`run_matrix.py`). 같은 환경·시드면 초기 모델·악성·지연·참여 일정이 같음
+- **구현 내용:** 환경 4개(기준, 지연 3명, 부분 참여 5명, 레이블 편향 α 0.5)를 기준에서 한 항목씩만 바꿈. 환경 4 × (정상, 공격) × (FedAvg, 클리핑, 중앙값) × 시드 3개 = 72회 일괄 실행(`run_main.py`). 같은 환경·시드면 초기 모델·악성·지연·참여 일정이 같음
 - **결과**
   - 12조합 2라운드 동작 확인: 지연 환경은 매 라운드 3명 `late` 제외, 실제 채택 악성 비율 0.29(전체 0.2)
   - 레이블 편향 정상 40라운드(시드 0): 검증 73.80%(IID 76.23%, 둘 다 36\~40라운드 평균), 클라이언트별 성능 0.67\~0.79
@@ -38,24 +38,30 @@
   - 성능: `class_acc.csv`(클래스별), `client_acc.csv`(클라이언트별 분포 가중 정확도)
   - 복원 로그: DLG `results.csv`(이미지, σ, 반복 횟수, MSE), 복원 이미지
   - 재실행용: `config.yaml`(설정·시드·분할·악성 ID 등 일정), 5라운드마다 전역 모델 `models/round_XXX.pt`
-  - 비교표·그래프: `compare_matrix.py`가 `runs.csv`에서 공격 피해·방어 개선·정상 손실(%p, 시드별 값과 평균)과 정확도 막대그래프를 만듦. 발산한 칸은 값 대신 발산 라운드, 발산 전 모델 기준 값은 참고 표로 따로 (`experiments/matrix/_tables/`)
-- **미수행:** 저장한 모델에서 조건을 바꿔 특정 라운드부터 다시 돌리는 도구
+  - 비교표·그래프: `compare_main.py`가 `runs.csv`에서 공격 피해·방어 개선·정상 손실(%p, 시드별 값과 평균)과 정확도 막대그래프를 만듦. 발산한 칸은 값 대신 발산 라운드, 발산 전 모델 기준 값은 참고 표로 따로 (`experiments/4_main/_tables/`)
+  - 재실행: `scripts/replay.py`가 저장된 라운드 모델에서 조건 하나(악성 조작 해제·방어 교체·공격 해제)만 바꿔 다시 돌림. 조건을 안 바꾸면 원래 결과와 비트 단위로 같음 ([통합.md 3-1](../통합.md))
 
-### 6. 공격·방어 결과의 원인 분석
-- **미수행.** 재실행에 쓸 모델은 저장됨. 후보 사례: DLG dog 이미지(σ 1e-2)의 복원 정체 (노이즈가 아니라 최적화 초반 폭주, [3_DLG-결과.md](3_DLG-결과.md))
+### 6. 공격·방어 결과의 원인 분석 → [원인분석.md](../../reports/analysis/원인분석.md)
+- **사례 1 (공격·방어):** 5라운드에서 방어만 바꾸면 회복하고, 악성 1명만 해제해도 학습이 시작됨 → 집계 결과가 (채택 정상 − 5 × 악성) 비율로 결정된다는 가설과 맞음
+- **사례 2 (운영 환경):** 지연 환경은 정상 3명이 빠져 채택된 악성 비율이 커지고, 공격이 더 빨리 무너뜨림
+- **사례 3 (DLG):** dog 이미지 σ 1e-2의 높은 MSE는 노이즈가 아니라 최적화 정체 (복원 초기값만 바꾸면 MSE 0.04 수준)
+- **권고:** 공모·참여 감소에는 중앙값 집계, DLG에는 σ 3e-2 이상 노이즈 + 별도 레이블 보호
 
 ## 코드 구조
-```
-scripts/run_server_experiment.py ── 서버(serve.py)를 띄우고 → 클라이언트(run_clients.py) 실행 → 서버 종료
-                                     scripts/run_matrix.py는 이것을 72회 반복
+`scripts/run_server_experiment.py`는 서버(`serve.py`)를 띄우고 → 클라이언트(`run_clients.py`)를 실행한 뒤 → 서버를 끕니다. `scripts/run_main.py`는 이것을 72회 반복합니다. 한 라운드의 흐름은 아래와 같습니다.
 
-클라이언트 실행 프로그램 (client/program.py)                 Flask 서버 (server/)
-  GET /model ─────────────────────────────────────────▶  전역 모델·참여자·마감
-  참여자 순서대로 로컬 학습 (client/local_train.py)
-  악성이면 공격 (attacks/collusion.py)
-  POST /update ───────────────────────────────────────▶  검증·제외 (server/validation.py)
-  POST /aggregate ────────────────────────────────────▶  FedAvg / 클리핑 / 중앙값 (defenses/)
-  검증 평가·로그 (experiment/, logger/)
+```mermaid
+sequenceDiagram
+    participant C as 클라이언트 실행 프로그램<br/>(client/program.py)
+    participant S as Flask 서버<br/>(server/)
+    C->>S: GET /model
+    S-->>C: 전역 모델·참여자·마감
+    Note over C: 참여자 순서대로 로컬 학습 (client/local_train.py)<br/>악성이면 공격 (attacks/collusion.py)
+    C->>S: POST /update (클라이언트마다)
+    Note over S: 검증·제외 (server/validation.py)
+    C->>S: POST /aggregate
+    Note over S: FedAvg / 클리핑 / 중앙값 (defenses/)
+    Note over C: 검증 평가·로그 (experiment/, logger/)
 ```
 
 | 모듈 (`src/fedsec/`) | 역할 |
@@ -78,16 +84,16 @@ scripts/run_server_experiment.py ── 서버(serve.py)를 띄우고 → 클라
 
 ```bash
 pip install -e ".[test]"                              # 설치 (torch, torchvision, PyYAML, Flask, requests + pytest)
-python -m pytest -q tests tools/tests                 # 테스트 (554개, 약 10초)
+python -m pytest -q tests tools/tests                 # 테스트 (624개, 약 15초)
 
 # 서버를 거친 실험 1회 (서버를 띄우고 → 클라이언트 10명 실행 → 서버 종료)
 python scripts/run_server_experiment.py --name demo --rounds 3
 python scripts/run_server_experiment.py --name d_atk_med --env configs/env/delay.yaml --attack --aggregator median
 
 # 본 실험 72회 (끊기면 같은 명령으로 이어서)
-python scripts/run_matrix.py --dry-run                # 목록과 상태만
-python scripts/run_matrix.py --seeds 0 1 2
-python scripts/compare_matrix.py                      # 비교표·그래프 → experiments/matrix/_tables/
+python scripts/run_main.py --dry-run                # 목록과 상태만
+python scripts/run_main.py --seeds 0 1 2
+python scripts/compare_main.py                      # 비교표·그래프 → experiments/4_main/_tables/
 
 # DLG (CPU, configs/dlg.yaml 그대로: 이미지 5장 × σ 3개, 약 2분)
 python scripts/run_dlg.py --name demo
@@ -98,7 +104,7 @@ python scripts/run_experiment.py --name baseline
 - 자주 쓰는 옵션
   - 학습: `--seed --rounds --lr --momentum --weight-decay --local-ep --local-bs --evaluate-test --save-every`
   - 환경·공격·방어: `--env --attack/--no-attack --aggregator {fedavg,clip_fedavg,median} --clip-norm --clip-before-median`
-- 공식 테스트셋은 `--evaluate-test`를 줄 때만 평가합니다(`run_matrix.py`는 항상 켬). 설정 비교는 검증 정확도로 합니다.
+- 공식 테스트셋은 `--evaluate-test`를 줄 때만 평가합니다(`run_main.py`는 항상 켬). 설정 비교는 검증 정확도로 합니다.
 - 결과: `experiments/<name>/`. 파일 설명과 Kaggle 실행은 [scripts/README.md](../../scripts/README.md), API와 입력 파일은 [2_서버-API.md](2_서버-API.md)
 - 서버와 클라이언트를 터미널 두 개로 따로 띄우는 방법도 [2_서버-API.md](2_서버-API.md)에 있습니다.
 - **지난 결과 다시 실행하기:** 기준은 각 결과 폴더의 `config.yaml`입니다. 기본값이 바뀌기 전(weight_decay 0, σ 5개)에 돌린 실험은 각 문서의 "결과 파일"에 적힌 명령(당시 값을 옵션으로 주고 `*_rerun` 새 폴더에 저장)을 쓰세요.
@@ -119,9 +125,9 @@ python scripts/run_experiment.py --name baseline
 | 경로 | 내용 |
 |---|---|
 | `src/fedsec/` | 실험 엔진 패키지 (위 "코드 구조") |
-| `scripts/` | 실행 스크립트 (`run_server_experiment.py`, `serve.py`, `run_clients.py`, `run_matrix.py`, `compare_matrix.py`, `run_dlg.py`, `run_experiment.py`, `make_split.py`) |
+| `scripts/` | 실행 스크립트 (`run_server_experiment.py`, `serve.py`, `run_clients.py`, `run_main.py`, `compare_main.py`, `run_dlg.py`, `run_experiment.py`, `make_split.py`) |
 | `configs/` | 학습 `base.yaml`, 공격·방어 `attack_defense.yaml`, 환경 `env/`, 레이블 편향 분할 `splits/`, DLG `dlg.yaml` |
 | `tests/` | 집계·공격·방어·환경·서버·DLG·성능 지표 수치 예제 테스트 (`tools/tests/`는 탐색 도구 테스트) |
 | `tools/` | 학습 설정 탐색 `sweep.py`, 비교표 `summarize.py`, 실행 목록 `plans/` |
-| `experiments/` | 실험 결과 (`models/`는 커밋 안 함) |
+| `experiments/` | 실험 결과 (`models/`는 원인 분석 출발 모델 12개만 커밋) |
 | `docs/` | 명세 단계별 문서 (앞 숫자가 단계: `1_학습설정-결과.md`, `2_서버-API.md`, `3_공격-방어.md`, `3_DLG-결과.md`, `4_운영환경.md`, `5_로그-평가.md`) |

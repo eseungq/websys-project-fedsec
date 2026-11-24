@@ -8,6 +8,6 @@
 - 내부자 공격 벡터 (악성 0명 / 1명 / 2명)
 - 채택 수 0개(N/A), 3개 미만(갱신 안 함) 처리
 - 클래스별 정확도, 클라이언트별 분포 가중 정확도 (`test_metrics.py`)
-- 공격 피해·방어 개선·정상 손실(%p), 발산한 칸과 참고값, 잘못된 runs.csv 거부 (`test_comparison.py`, `test_compare_matrix.py`)
+- 공격 피해·방어 개선·정상 손실(%p), 발산한 칸과 참고값, 잘못된 runs.csv 거부 (`test_comparison.py`, `test_compare_main.py`)
 - 재실행: 시작 라운드, 저장 모델 검사, 악성 조작 해제, 이어서 돈 결과와 다시 돈 결과가 같은지 (`test_replay.py`)
 - 대시보드: 결과 폴더 찾기, 비교표·DLG, 경로 거부, 실행형 입력 검증 (`test_dashboard.py`)

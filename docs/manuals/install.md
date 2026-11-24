@@ -30,7 +30,7 @@ git config --global core.quotepath false
 
 ### 웹 대시보드 (발표 시연)
 ```bash
-python scripts/serve_web.py                  # 브라우저에서 http://127.0.0.1:8765/
+python web/app.py                            # 브라우저에서 http://127.0.0.1:8765/
 ```
 - 연합학습 서버와 대시보드가 한 서버·한 포트에서 뜹니다.
 - **조회형:** 끝난 실험(본 실험 72회, 재실행), 비교표, DLG 결과를 봅니다.
@@ -45,26 +45,26 @@ python scripts/run_server_experiment.py --name d_atk_med --env configs/env/delay
 
 ### 본 실험 72회와 비교표
 ```bash
-python scripts/run_matrix.py --dry-run       # 상태만 확인 (이미 끝난 실행은 건너뜀)
-python scripts/run_matrix.py                 # 남은 실행을 이어서 (중단해도 다시 실행하면 이어짐)
-python scripts/compare_matrix.py             # experiments/matrix/_tables/ 에 비교표·그래프
+python scripts/run_main.py --dry-run       # 상태만 확인 (이미 끝난 실행은 건너뜀)
+python scripts/run_main.py                 # 남은 실행을 이어서 (중단해도 다시 실행하면 이어짐)
+python scripts/compare_main.py             # experiments/4_main/_tables/ 에 비교표·그래프
 ```
 MPS 기준 약 2시간 35분입니다.
 
 ### 재실행 (원인 분석)
 ```bash
-python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --unmask 2         # 악성 2번 조작만 해제
-python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --aggregator median  # 방어만 교체
-python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --same               # 재현 확인
+python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --unmask 2         # 악성 2번 조작만 해제
+python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --aggregator median  # 방어만 교체
+python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --same               # 재현 확인
 ```
 저장된 모델 파일(`experiments/<실행>/models/round_XXX.pt`)이 있어야 합니다. 레포에는 원인 분석에 쓴 출발 모델만 있습니다: `baseline-attack-fedavg-s0~2`, `delay-attack-fedavg-s0~2`의 `round_000.pt`·`round_005.pt`.
 
-다른 실행·라운드의 모델이 필요하면 그 실행을 다시 돌려야 합니다. `run_matrix.py`는 `summary.json`과 로그로 완료를 판정해 끝난 실행을 건너뛰므로, 실행 폴더를 `experiments/` 밖으로 옮긴 뒤 그 실행만 지정해 돌립니다 (`experiments/` 안에 두면 대시보드 목록에 같은 실행이 두 번 나옵니다).
+다른 실행·라운드의 모델이 필요하면 그 실행을 다시 돌려야 합니다. `run_main.py`는 `summary.json`과 로그로 완료를 판정해 끝난 실행을 건너뛰므로, 실행 폴더를 `experiments/` 밖으로 옮긴 뒤 그 실행만 지정해 돌립니다 (`experiments/` 안에 두면 대시보드 목록에 같은 실행이 두 번 나옵니다).
 
 같은 시드라도 같은 모델이 나오는 것은 기기·torch 버전이 원래 실행과 같을 때입니다. 본 실험은 Apple MPS에서 돌렸고 기기·torch 버전은 실행마다 `env.json`에 적혀 있습니다. 다른 기기(CPU·CUDA)나 버전에서는 값이 조금 달라질 수 있습니다. 원래 체크포인트와 같은 모델이 필요하면 같은 환경에서 돌리세요.
 ```bash
-mv experiments/matrix/baseline-normal-fedavg-s0 ../baseline-normal-fedavg-s0.bak   # 레포 밖으로
-python scripts/run_matrix.py --envs baseline --attacks normal --aggregators fedavg --seeds 0
+mv experiments/4_main/baseline-normal-fedavg-s0 ../baseline-normal-fedavg-s0.bak   # 레포 밖으로
+python scripts/run_main.py --envs baseline --attacks normal --aggregators fedavg --seeds 0
 ```
 
 ### 모델 역추적(DLG)

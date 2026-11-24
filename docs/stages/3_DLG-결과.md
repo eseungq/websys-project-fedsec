@@ -52,7 +52,7 @@
 
 ## 결과
 
-### 실험 1. σ 탐색 (`experiments/dlg/sweep_sigma/`, 300회)
+### 실험 1. σ 탐색 (`experiments/3_dlg/sweep_sigma/`, 300회)
 
 | σ | truck (1) | dog (27) | cat (38) | horse (52) | automobile (61) | 레이블 |
 |---|---|---|---|---|---|---|
@@ -63,11 +63,11 @@
 | 1e-1 | 0.278 | 0.305 | 0.286 | 0.270 | 0.261 | 5/5 |
 | (참고) 시작점 | 0.252 | 0.180 | 0.265 | 0.222 | 0.244 | |
 
-![σ별 복원](../../experiments/dlg/sweep_sigma/summary.png)
+![σ별 복원](../../experiments/3_dlg/sweep_sigma/summary.png)
 
 (그림: 줄마다 이미지 한 장. 원본 | σ 0, 1e-4, 1e-3, 1e-2, 1e-1. 칸 아래 숫자는 MSE)
 
-### 실험 2. 중간 σ 보강 (`experiments/dlg/refine_sigma/`, 300회)
+### 실험 2. 중간 σ 보강 (`experiments/3_dlg/refine_sigma/`, 300회)
 "나빠지기 시작하는 값"과 "형체가 사라지는 값"의 경계를 좁히려고 3e-3, 3e-2를 추가했다.
 
 | σ | MSE (5장) | 눈으로 본 결과 | 레이블 |
@@ -75,9 +75,9 @@
 | 3e-3 | 0.0048\~0.0082 | 형체 뚜렷, cat 등에서 알갱이가 보이기 시작 | 5/5 |
 | 3e-2 | 0.222\~0.239, *cat 0.338 (정체)* | 형체 없음. 이미 시작점 수준 | 4/5 (정체한 cat만 틀림) |
 
-![중간 σ](../../experiments/dlg/refine_sigma/summary.png)
+![중간 σ](../../experiments/3_dlg/refine_sigma/summary.png)
 
-### 실험 3. 반복 횟수만 바꾸기 (`experiments/dlg/iterations/`, σ 0·1e-3·1e-2 × 50·1000회)
+### 실험 3. 반복 횟수만 바꾸기 (`experiments/3_dlg/iterations/`, σ 0·1e-3·1e-2 × 50·1000회)
 같은 이미지·모델·더미 시작값에서 반복 횟수만 바꿨다. 50·300회 지점의 MSE는 300회 실행(실험 1)의 같은 지점과 45개 모두 같다 → 반복 횟수가 다른 실행끼리 그대로 비교할 수 있다.
 
 | σ | 50회 MSE | 300회 MSE | 1000회 MSE | 해석 |
@@ -86,7 +86,7 @@
 | 1e-3 | 0.006\~0.028 | 0.0006\~0.0010 | 300회와 같음 | 50회는 덜 됨(바닥 비율 0.96\~1.82). 300회에 바닥(0.81) 도달 |
 | 1e-2 | 0.039\~0.057 (dog 정체 제외) | 0.051\~0.079 | 0.051\~0.080 | 50회에 이미 바닥 도달. 반복을 늘리면 **오히려 나빠짐** |
 
-### 실험 4. 정체 사례 재실험 (`experiments/dlg/dog_sigma0.01_dummy{1,2,3}/`)
+### 실험 4. 정체 사례 재실험 (`experiments/3_dlg/dog_sigma0.01_dummy{1,2,3}/`)
 dog σ 1e-2(더미 시드 0)는 MSE 0.32로 σ 1e-1보다도 나빴다. 같은 이미지·모델·노이즈에서 **더미 시드만** 1, 2, 3으로 바꿔 다시 돌렸다.
 
 | 더미 시드 | MSE | 그래디언트 차이 | 노이즈 바닥 비율 | 최대 픽셀 |
@@ -102,7 +102,7 @@ dog σ 1e-2(더미 시드 0)는 MSE 0.32로 σ 1e-1보다도 나빴다. 같은 �
 
 ## 반복 횟수 궤적 해석 (덜 된 복원과 노이즈 효과 구분)
 
-truck(1)의 궤적 (`experiments/dlg/iterations/trajectory.csv`, 1000회 실행. 그래디언트 차이 / MSE)
+truck(1)의 궤적 (`experiments/3_dlg/iterations/trajectory.csv`, 1000회 실행. 그래디언트 차이 / MSE)
 
 | 반복 | σ 0 | σ 1e-3 | σ 1e-2 |
 |---|---|---|---|
@@ -159,10 +159,10 @@ truck(1)의 궤적 (`experiments/dlg/iterations/trajectory.csv`, 1000회 실행.
 ## 결과 파일
 | 실험 | 결과 폴더 (레포 루트 기준) | 다시 실행하는 명령 (새 폴더 `*_rerun`) |
 |---|---|---|
-| 1 | `experiments/dlg/sweep_sigma/` | `python scripts/run_dlg.py --name sweep_sigma_rerun --sigmas 0 1e-4 1e-3 1e-2 1e-1` |
-| 2 | `experiments/dlg/refine_sigma/` | `python scripts/run_dlg.py --name refine_sigma_rerun --sigmas 0.003 0.03` |
-| 3 | `experiments/dlg/iterations/` | `python scripts/run_dlg.py --name iterations_rerun --sigmas 0 0.001 0.01 --iterations 50 1000` |
-| 4 | `experiments/dlg/dog_sigma0.01_dummy{1,2,3}/` | `python scripts/run_dlg.py --name dog_sigma0.01_dummy1_rerun --images 27 --sigmas 0.01 --dummy-seed 1` (2, 3도 같은 방식) |
+| 1 | `experiments/3_dlg/sweep_sigma/` | `python scripts/run_dlg.py --name sweep_sigma_rerun --sigmas 0 1e-4 1e-3 1e-2 1e-1` |
+| 2 | `experiments/3_dlg/refine_sigma/` | `python scripts/run_dlg.py --name refine_sigma_rerun --sigmas 0.003 0.03` |
+| 3 | `experiments/3_dlg/iterations/` | `python scripts/run_dlg.py --name iterations_rerun --sigmas 0 0.001 0.01 --iterations 50 1000` |
+| 4 | `experiments/3_dlg/dog_sigma0.01_dummy{1,2,3}/` | `python scripts/run_dlg.py --name dog_sigma0.01_dummy1_rerun --images 27 --sigmas 0.01 --dummy-seed 1` (2, 3도 같은 방식) |
 
 - 다시 실행할 때 기준은 각 폴더의 `config.yaml`이다. `configs/dlg.yaml` 기본값은 실험 뒤 σ 3개로 바뀌었으므로, 위 명령처럼 당시 값을 옵션으로 준다
 - 기존 폴더는 그대로 두고 `*_rerun` 폴더에 새로 만든다 (같은 이름이면 `run_dlg.py`가 멈춤). 두 폴더의 `results.csv`를 비교하면 재현 여부를 확인할 수 있다

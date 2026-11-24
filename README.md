@@ -15,6 +15,7 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 - [일정](#일정)
 - [시스템 구조](#시스템-구조)
 - [대표 코드 통합](#대표-코드-통합)
+- [단계별 진행](#단계별-진행)
 - [디렉토리 구성](#디렉토리-구성)
 - [실험 설계](#실험-설계)
 - [실행 환경](#실행-환경)
@@ -90,11 +91,11 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 - 네트워크 지연은 실제 네트워크가 아니라 **가상 시간**으로 판정합니다.
 - 웹 대시보드도 같은 Flask 서버(같은 포트)에서 함께 뜹니다. 끝난 실험 결과를 보는 조회형과, 짧은 실험을 직접 돌려 보는 실행형이 있습니다.
 
-```
-브라우저 ──(대시보드 /, /api/*)──┐
-                                 ├─ Flask 서버 1개 (127.0.0.1) ── src/fedsec (집계·방어·검증·로그)
-클라이언트 실행 프로그램 ──(REST /model, /update, /aggregate)──┘
-  └ 가상 클라이언트 10개를 한 프로세스에서 순서대로 학습 (공격은 클라이언트 쪽에서만)
+```mermaid
+flowchart LR
+    B["브라우저"] -- "대시보드 /, /api/*" --> S
+    C["클라이언트 실행 프로그램<br/>가상 클라이언트 10개를<br/>한 프로세스에서 순서대로 학습<br/>(공격은 클라이언트 쪽에서만)"] -- "REST /model, /update, /aggregate" --> S
+    S["Flask 서버 1개<br/>(127.0.0.1)"] --> F["src/fedsec<br/>집계·방어·검증·로그"]
 ```
 
 ---
@@ -107,9 +108,22 @@ Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 
 | 라운드 재실행 도구 | 배병욱 PR #9의 방식을 참고해 새로 작성 |
 | 웹 대시보드 | 안태현 PR #8을 바탕으로 다시 작성 |
 
-선정 이유, 옮긴 위치, 새로 만든 것, 확인한 것은 **[docs/통합.md](docs/통합.md)**에 정리했습니다.
+선정 이유, 옮긴 위치, 새로 만든 것, 확인한 것은 [**docs/통합.md**](docs/통합.md)에 정리했습니다.
 
 ---
+
+## 단계별 진행
+
+명세 단계마다 무엇을 했는지와 결과는 아래 문서에 있습니다. 요약은 [docs/stages/README.md](docs/stages/README.md)에 모아 두었습니다.
+
+| 단계 | 한 일 | 문서 | 실험 결과 |
+|---|---|---|---|
+| 1. 기본 학습·데이터 준비 | 모델·학습 설정 탐색, 클라이언트 10명 분할 | [1_학습설정-결과.md](docs/stages/1_학습설정-결과.md) | [`1_setup/`](experiments/1_setup/) |
+| 2. 연합학습 환경 | Flask 서버 1개 + 가상 클라이언트 10개, REST API, 제출 검증 | [2_서버-API.md](docs/stages/2_서버-API.md) | |
+| 3. 공격과 방어 | 내부자 협력 공격(−5배), 클리핑·중앙값, DLG와 노이즈 방어 | [3_공격-방어.md](docs/stages/3_공격-방어.md), [3_DLG-결과.md](docs/stages/3_DLG-결과.md) | [`3_clip_threshold/`](experiments/3_clip_threshold/), [`3_dlg/`](experiments/3_dlg/) |
+| 4. 운영 환경별 비교 | 기준·지연·부분 참여·레이블 편향 × 정상·공격 × 집계 3 × 시드 3 = 72회 | [4_운영환경.md](docs/stages/4_운영환경.md) | [`4_main/`](experiments/4_main/) ([비교표](experiments/4_main/_tables/comparison.md)) |
+| 5. 로그 수집·평가 | 학습·복원 로그, 모델 저장, 공격 피해·방어 개선·정상 손실 계산, 재실행 도구 | [5_로그-평가.md](docs/stages/5_로그-평가.md), [통합.md 3-1](docs/통합.md) | |
+| 6. 원인 분석 | 사례 3건(공격·방어, 운영 환경, DLG), 방어 권고 2건 | [원인분석.md](reports/analysis/원인분석.md) | [`6_replay/`](experiments/6_replay/), [`3_dlg/`](experiments/3_dlg/) |
 
 ## 디렉토리 구성
 
@@ -123,16 +137,19 @@ websys-project-fedsec/
 │   ├── environments/        # 운영 환경: 참여·지연 일정, 가상 시간, 채택 판정
 │   ├── server/              # Flask REST API, 서버 상태, 제출 검증
 │   ├── experiment/  logger/  analysis/
-├── web/fl_server/           # 웹 대시보드 (같은 Flask 서버에 붙는 Blueprint, 화면·정적 파일)
+├── web/                     # Flask 웹 서버: app.py(실행) routes.py(주소) run.py(실행형) results.py·dlg.py(결과 읽기)
+│   └── templates/  static/  # 대시보드 화면(index.html), CSS·JS
 ├── scripts/                 # 실행 스크립트 (서버, 클라이언트, 일괄 실행, 재실행, DLG, 비교표, 대시보드)
 ├── tests/                   # 집계·방어 수치 예제, 서버·클라이언트·재실행·대시보드 테스트
 ├── tools/                   # 학습 설정 탐색 도구
 ├── configs/                 # 학습·공격·방어·DLG 설정, 환경 4개(env/), 데이터 분할(splits/)
 ├── experiments/             # 실험 결과: 설정·실행 환경·요약·라운드·클라이언트 로그
-│   ├── matrix/              #   본 실험 72회와 비교표(_tables/)
-│   ├── replay/              #   재실행 결과 (replay.json)
-│   ├── dlg/                 #   DLG 실험
-│   └── sweep/  norm_check/ … #   학습 설정 탐색, 클리핑 상한 측정
+│   ├── 1_setup/             #   1단계 학습 설정 탐색 (lr·에폭·배치)
+│   ├── 3_clip_threshold/    #   클리핑 상한 정하기 (정상 업데이트 노름 측정)
+│   ├── 3_dlg/               #   모델 역추적(DLG)
+│   ├── 4_main/              #   본 실험 72회와 비교표(_tables/)
+│   ├── 4_main_repeat/       #   본 실험 재현 확인
+│   └── 6_replay/            #   원인 분석 재실행 (replay.json)
 ├── docs/
 │   ├── 통합.md              # 대표 코드 통합 기록
 │   ├── stages/              # 명세 1~5단계 구현 내용·결과·한계
@@ -155,13 +172,13 @@ websys-project-fedsec/
 │   └── cifar-10-batches-py/        ✱ CIFAR-10 원본 (data/README.md 참고)
 ├── docs/00_spec/Project 5.pdf      ✱ 과제 명세 원본
 ├── experiments/
-│   ├── matrix/<실행>/
+│   ├── 4_main/<실행>/
 │   │   ├── config.yaml  env.json  summary.json  rounds.csv  clients.csv  class_acc.csv  client_acc.csv
 │   │   ├── server/server_rounds.csv  server/exclusions.csv
 │   │   ├── server/server.log  server_status.json   ✱ 서버 원시 로그, 상태 덤프
 │   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점, 원인 분석 출발 모델 12개만 커밋)
-│   ├── replay/<실행>/models/       ✱
-│   ├── dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
+│   ├── 6_replay/<실행>/models/       ✱
+│   ├── 3_dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
 │   └── live/                       ✱ 대시보드 실행형으로 돌린 시연 결과
 └── checkpoints/                    ✱
 ```
@@ -178,7 +195,7 @@ websys-project-fedsec/
 | 부분 참여 | 라운드마다 10개 중 5개 무작위 선택 |
 | 레이블 편향 | 같은 데이터의 클라이언트 배정만 변경 (표본 수 유지) |
 
-환경마다 **{정상, 내부자 공격} × {FedAvg, 클리핑, 중앙값}**을 비교하고, 여러 시드로 반복합니다.
+환경마다 **{정상, 내부자 공격} × {FedAvg, 클리핑, 중앙값}** 조합을 비교하고, 여러 시드로 반복합니다.
 
 - 환경 요인은 한 번에 하나씩만 바꿉니다.
 - 같은 환경·시드에서는 초기 모델·분할·악성 ID·참여·지연 일정을 공유합니다.
@@ -192,7 +209,7 @@ websys-project-fedsec/
 
 ## 실행 환경
 
-- 본 실험 72회와 재실행은 **Apple MPS(Mac)**에서 실행했습니다. 실행마다 기기·torch 버전·커밋을 `env.json`에 남깁니다.
+- 본 실험 72회와 재실행은 **Mac의 Apple MPS**에서 실행했습니다. 실행마다 기기·torch 버전·커밋을 `env.json`에 남깁니다.
 - Kaggle GPU에서도 돌릴 수 있습니다 ([scripts/README.md](scripts/README.md#kaggle에서-실행)). Kaggle 결과는 세션이 끝나면 사라지므로 끝나기 전에 내려받아 둡니다.
 
 ---
@@ -210,17 +227,17 @@ pytest -q                              # 테스트
 CIFAR-10은 [data/README.md](data/README.md)대로 `data/`에 받아 둡니다. 명령은 모두 레포 루트에서 실행합니다.
 
 ```bash
-python scripts/serve_web.py                                   # 대시보드 + 연합학습 서버 http://127.0.0.1:8765/
+python web/app.py                                             # 대시보드 + 연합학습 서버 http://127.0.0.1:8765/
 python scripts/run_server_experiment.py --name demo --rounds 3 --env configs/env/delay.yaml --attack --aggregator median
-python scripts/run_matrix.py --dry-run                        # 본 실험 72회 상태
-python scripts/compare_matrix.py                              # 비교표·그래프
-python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --unmask 2   # 재실행
+python scripts/run_main.py --dry-run                        # 본 실험 72회 상태
+python scripts/compare_main.py                              # 비교표·그래프
+python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --unmask 2   # 재실행
 python scripts/run_dlg.py --help                              # DLG
 ```
 
 자세한 설치·실행 방법은 [설치·실행 설명서](docs/manuals/install.md), API는 [API 설명서](docs/manuals/api.md), 설정 파일은 [입력 파일 설명서](docs/manuals/input_files.md)에 있습니다. 스크립트별 결과 파일은 [scripts/README.md](scripts/README.md), 단계별 구현 내용과 결과는 [docs/stages/](docs/stages/README.md)에 있습니다.
 
-**결과:** 본 실험 비교표는 [experiments/matrix/_tables/comparison.md](experiments/matrix/_tables/comparison.md), 원인 분석 3건과 방어 권고 2건은 [reports/analysis/원인분석.md](reports/analysis/원인분석.md)에 있습니다.
+**결과:** 본 실험 비교표는 [experiments/4_main/_tables/comparison.md](experiments/4_main/_tables/comparison.md), 원인 분석 3건과 방어 권고 2건은 [reports/analysis/원인분석.md](reports/analysis/원인분석.md)에 있습니다.
 
 폴더 이름이 한글이므로 처음 한 번 git 설정을 해 둡니다.
 
@@ -275,7 +292,7 @@ tests/test_collusion.py
 ```
 fix: 채택 수 3개 미만일 때 모델이 갱신되는 문제 수정
 
-web/fl_server/round.py
+src/fedsec/server/state.py
 * 채택 수 3개 미만이면 집계를 건너뛰고 사유를 로그에 기록
 ```
 
@@ -345,11 +362,11 @@ git push
 
 ### 5. 머지 방식 (11/24)
 1. 각자 `members/<이름>/README.md`를 나란히 놓고 **모듈 단위**로 좋은 코드를 고릅니다.
-2. 고른 코드를 `src/fedsec/`(엔진), `web/fl_server/`(Flask 서버)로 옮기는 PR을 만듭니다.
+2. 고른 코드를 `src/fedsec/`(엔진), `web/`(Flask 서버)로 옮기는 PR을 만듭니다.
 3. `members/`는 지우지 않고 근거로 남깁니다.
 4. 머지된 코드로 기준 설정을 다시 확인합니다.
 
-→ 11/24 통합 결과는 [docs/통합.md](docs/통합.md)에 있습니다. 엔진은 `src/fedsec/`, Flask 서버는 `src/fedsec/server/`, 대시보드는 `web/fl_server/`에 들어갔습니다.
+→ 11/24 통합 결과는 [docs/통합.md](docs/통합.md)에 있습니다. 엔진은 `src/fedsec/`, Flask 서버는 `src/fedsec/server/`, 대시보드는 `web/`에 들어갔습니다.
 
 ### 6. 커밋하지 않는 것
 CIFAR-10 데이터, 모델 파일(`*.pt`), 원시 로그, 노트북 출력, 과제 명세 PDF.
