@@ -37,3 +37,6 @@ members/*/data/*
 # 서버 경유 실행의 서버 원시 로그와 전체 상태 덤프 (라운드·제외 요약 server_rounds.csv, exclusions.csv는 커밋)
 experiments/**/server/server.log
 experiments/**/server_status.json
+
+# 대시보드 실행형(scripts/serve_web.py)의 시연 결과
+experiments/live/
