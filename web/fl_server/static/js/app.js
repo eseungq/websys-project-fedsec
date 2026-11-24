@@ -367,7 +367,8 @@ async function pollStatus() {
 
 // 실행형 화면: 진행 중이면 상태 응답으로 그리고, 끝난 실행은 상세 결과로 연다 (조회형에서 고른 결과와 무관)
 function showLiveRun(status, running) {
-  if (running) {
+  // 진행 중이거나, 한 라운드도 못 끝내고 멈춘 실행(상세 결과가 없음)은 상태 응답으로 그린다
+  if (running || status.rounds_done === 0) {
     renderRun({ id: status.run_id, summary: status.summary, plan: status.plan, replay: null, rounds: status.rounds,
       clients: status.clients, class_acc: [], client_acc: [], exclusions: [] }, { live: true, running });
     setText("real-time", `${status.elapsed_sec.toFixed(1)}s`);
