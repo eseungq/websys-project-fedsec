@@ -36,7 +36,7 @@ python web/app.py                            # 브라우저에서 http://127.0.0
 - **조회형:** 끝난 실험(본 실험 72회, 재실행), 비교표, DLG 결과를 봅니다.
 - **실행형:** 환경·공격·집계·시드·라운드 수(최대 10)를 골라 짧은 실험을 돌립니다. 결과는 `experiments/live/`에 남습니다.
 
-### 실험 1회 (서버를 띄우고 → 가상 클라이언트 10개 실행 → 서버 종료)
+### 실험 1회 (서버를 띄우고 → 가상 클라이언트 10명 실행 → 서버 종료)
 ```bash
 python scripts/run_server_experiment.py --name demo --rounds 3
 python scripts/run_server_experiment.py --name d_atk_med --env configs/env/delay.yaml --attack --aggregator median --evaluate-test
@@ -86,3 +86,24 @@ CPU에서 돌고, 이미지 5장 × σ 3개에 몇 분 걸립니다.
 | `서버 설정이 다릅니다` | `serve.py`와 `run_clients.py`에 다른 환경·방어 옵션을 줌. 같은 값을 줍니다 |
 | `라운드 K의 저장된 모델이 없습니다` | 재실행할 실행의 `models/`에 그 라운드가 없음. 메시지에 나온 저장된 라운드 중에서 고릅니다 |
 | macOS에서 포트 5000 충돌 | AirPlay 수신이 5000을 씀. 기본 포트는 8765이고 `--port`로 바꿀 수 있습니다 |
+
+## 5. 로컬에만 생기는 파일
+
+커밋되지 않는 파일(`.gitignore`)은 ✱로 표시했습니다. 실험을 돌린 PC에만 있습니다.
+
+```
+websys-project-fedsec/
+├── .venv/                          ✱ 가상환경 (pip install -e ".[test]")
+├── data/
+│   └── cifar-10-batches-py/        ✱ CIFAR-10 원본 (data/README.md 참고)
+├── docs/00_spec/Project 5.pdf      ✱ 과제 명세 원본
+├── experiments/
+│   ├── 4_main/<실행>/
+│   │   ├── config.yaml  env.json  summary.json  rounds.csv  clients.csv  class_acc.csv  client_acc.csv
+│   │   ├── server/server_rounds.csv  server/exclusions.csv
+│   │   ├── server/server.log  server_status.json   ✱ 서버 원시 로그, 상태 덤프
+│   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점, 원인 분석 출발 모델 12개만 커밋)
+│   ├── 6_replay/<실행>/models/       ✱
+│   ├── 3_dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
+│   └── live/                       ✱ 대시보드 실행형으로 돌린 시연 결과
+```

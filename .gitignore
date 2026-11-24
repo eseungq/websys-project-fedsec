@@ -14,8 +14,6 @@ venv/
 # 데이터·모델 (용량이 커서 커밋하지 않음, 스크립트로 내려받거나 생성)
 data/*
 !data/README.md
-checkpoints/*
-!checkpoints/README.md
 
 # 실험 결과: 요약(config, env, summary)만 커밋하고 원시 로그는 제외
 **/experiments/**/logs/

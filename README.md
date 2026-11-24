@@ -3,384 +3,167 @@
 > 2026-2 웹기반 시스템 · Project 5
 > **연합학습 보안 시뮬레이션 및 공격·방어 결과의 원인 분석**
 
-Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 구현합니다. 그 위에서 **내부자 협력 공격**과 **모델 역추적 공격(DLG)**, 그리고 각각의 방어를 실험합니다. 실험 결과는 라운드·클라이언트·방어 처리 로그와 연결하고, 조건을 바꾼 재실험으로 원인을 확인합니다.
+Flask·REST API로 연합학습(FedAvg) 시뮬레이터를 만들고, 그 위에서 두 가지 공격과 방어를 실험했습니다.
 
-> 11/24 조원별 구현에서 모듈별로 골라 대표 코드로 통합했습니다. 무엇을 어떻게 합쳤는지는 [대표 코드 통합](docs/통합.md)에 있습니다.
-
----
-
-## 목차
-- [프로젝트 개요](#프로젝트-개요)
-- [확장 방향](#확장-방향)
-- [일정](#일정)
-- [시스템 구조](#시스템-구조)
-- [대표 코드 통합](#대표-코드-통합)
-- [단계별 진행](#단계별-진행)
-- [디렉토리 구성](#디렉토리-구성)
-- [실험 설계](#실험-설계)
-- [실행 환경](#실행-환경)
-- [시작하기](#시작하기)
-- [협업 규칙](#협업-규칙)
-- [참고 자료](#참고-자료)
+- **내부자 협력 공격:** 악성 클라이언트 2명이 정상 업데이트 평균 × (−5)를 제출 → 노름 클리핑, 좌표별 중앙값으로 방어
+- **모델 역추적 공격(DLG):** 그래디언트에서 학습 이미지를 복원 → 가우시안 노이즈로 방어
+- 운영 환경 4개(기준, 지연, 부분 참여, 레이블 편향)에서 비교하고, 저장된 모델에서 조건 하나만 바꾼 재실험으로 원인을 확인
 
 ---
 
-## 프로젝트 개요
+## 핵심 결과
 
-| 항목 | 내용 |
-|---|---|
-| 데이터셋 | CIFAR-10, 가상 클라이언트 10개에 분할 |
-| 시스템 | 중앙 Flask 서버 1개 + 한 프로그램에서 순차 학습하는 가상 클라이언트 10개 (같은 PC, localhost) |
-| 집계 | FedAvg (표본 수 가중 평균), 노름 클리핑 + FedAvg, 좌표별 중앙값 |
-| 내부자 협력 공격 | 악성 2명이 정상 업데이트 평균 × (−5)를 제출 |
-| 모델 역추적 공격 | DLG로 이미지 1장의 그래디언트에서 입력 복원, 가우시안 노이즈로 방어 |
-| 운영 환경 | 기준 / 지연 / 부분 참여 / 레이블 편향 |
+**내부자 협력 공격** — 최종 테스트 정확도 (%, 시드 0·1·2 평균, CIFAR-10, 40라운드)
 
-### 성능 지표
-- **학습 성능**: 라운드별 검증 정확도, 최종 테스트 정확도, 클래스별·클라이언트별 성능
-- **내부자 공격**: 공격 피해, 방어 개선, 정상 환경에서의 방어 손실 (%p)
-  - 공격 피해 = 정상 FedAvg − 공격 FedAvg
-  - 방어 개선 = 공격+방어 − 공격 FedAvg
-  - 정상 손실 = 정상 FedAvg − 정상+방어
-- **모델 역추적**: 원본·복원 이미지 비교, 픽셀 오차(MSE)
-- **참여·시간**: 선택·채택·지연 제외 수, 실제 채택 악성 비율, 가상 경과 시간과 실제 실행 시간
+| 환경 | 정상 FedAvg | 공격 + FedAvg | 공격 + 클리핑 | 공격 + 중앙값 |
+|---|---|---|---|---|
+| 기준 | 76.22 | 발산 (11\~17라운드) | 67.46 | **69.15** |
+| 지연 (3명 마감 초과) | 73.49 | 발산 (6\~8라운드) | 58.91 | **61.55** |
+| 부분 참여 (10명 중 5명) | 75.41 | 발산 (8\~17라운드) | 65.86 | **66.70** |
+| 레이블 편향 | 74.17 | 발산 (4\~6라운드) | 59.68 | **60.74** |
 
----
+- 방어 없이는 모든 환경에서 학습이 무너지고, 방어를 써도 정상보다 7\~15%p 낮습니다.
+- 평균으로는 중앙값이 모든 환경에서 클리핑보다 높았습니다 (부분 참여·레이블 편향은 시드마다 엇갈림). 정상 환경에서 방어 때문에 잃는 정확도는 시드별로 1%p 미만입니다.
 
-## 확장 방향
+**모델 역추적(DLG)** — 노이즈 σ별 복원 오차(MSE, 클수록 복원 실패)
 
-**명세가 제시한 대로 구현·평가하고, 그 위에 두 결과의 관계를 학술적으로 분석합니다.**
+| σ | 0 | 1e-2 | 3e-2 | 1e-1 |
+|---|---|---|---|---|
+| MSE | 0.00005 이하 (그대로 복원) | 0.04\~0.08 (형체 남음) | 0.22\~0.24 (형체 사라짐) | 0.26\~0.31 |
 
-1. **명세대로 각각 측정**
-   - 내부자 협력 공격: 공격 피해·방어 개선·정상 손실
-   - 모델 역추적(DLG): 노이즈 수준별 MSE
-2. **두 결과의 관계 분석**: 구체적인 방법은 추후 결정합니다.
+- 정답 레이블은 σ 1e-1에서도 모두 새어 나갔습니다.
+
+**방어 권고**
+1. 내부자 공모가 의심되고, 특히 참여가 줄어드는 환경에서는 **좌표별 중앙값**을 씁니다.
+2. 그래디언트를 공유하면 전송 전 **σ 3e-2 이상**의 노이즈를 넣고, 레이블 보호는 별도로 합니다.
+
+자세한 숫자는 [비교표](experiments/4_main/_tables/comparison.md), 원인 분석 3건과 권고의 근거·한계는 [원인분석.md](reports/analysis/원인분석.md)에 있습니다.
 
 ---
 
-## 일정
-
-> 제출: **12월 10일**
-
-| 날짜 | 할 일 |
-|---|---|
-| 11/5 (목) | 명세 1단계: FedAvg 기본 숙지 |
-| 11/12 (목) | 모델, 옵티마이저, 학습률, Epoch(round), local_ep, local_bs 정리 |
-| \~11/19 (목) | 2단계 자세히 알아보기, 전체 이해, 학습 설정을 각자 로컬에서 찾아오기 |
-| 11/19 (목) | 3, 4단계 구현 → 각자 `members/<이름>/`에 코드 올리기. 비교 실험은 SGD로 고정해서 다시 |
-| 11/24 (화) | 대표 코드 선정·머지, 선정된 코드로 실험 |
-| 11/24\~26 | 5, 6단계 실험 |
-| 11/26 (목) | 실험 결과 확인, 보고서 작성 |
-| 12/1 (화) | 보고서 수정·완성, 필요하면 PPT |
-| 12/3 (목), 12/8 (화) | 못한 것 마무리 |
-| 12/10 | 제출 |
-
-### 학습 설정 용어
-| 용어 | 의미 |
-|---|---|
-| **round** | 서버가 모델을 나눠 주고 업데이트를 받아 합치는 한 사이클 |
-| **local_ep** | 한 라운드 안에서 각 클라이언트가 자기 데이터를 반복 학습하는 횟수 |
-| **local_bs** | 로컬 학습 때 한 번에 넣는 이미지 수 (batch size) |
-
----
-
-## 시스템 구조
-
-- 중앙 **Flask 서버 1개**와, 한 프로그램에서 순차 학습하는 **가상 클라이언트 10개**로 구성합니다.
-- 클라이언트는 **REST API**(같은 PC의 localhost)로 모델을 내려받고 업데이트를 제출합니다.
-- 네트워크 지연은 실제 네트워크가 아니라 **가상 시간**으로 판정합니다.
-- 웹 대시보드도 같은 Flask 서버(같은 포트)에서 함께 뜹니다. 끝난 실험 결과를 보는 조회형과, 짧은 실험을 직접 돌려 보는 실행형이 있습니다.
-
-```mermaid
-flowchart LR
-    B["브라우저"] -- "대시보드 /, /api/*" --> S
-    C["클라이언트 실행 프로그램<br/>가상 클라이언트 10개를<br/>한 프로세스에서 순서대로 학습<br/>(공격은 클라이언트 쪽에서만)"] -- "REST /model, /update, /aggregate" --> S
-    S["Flask 서버 1개<br/>(127.0.0.1)"] --> F["src/fedsec<br/>집계·방어·검증·로그"]
-```
-
----
-
-## 대표 코드 통합
-
-| 모듈 | 가져온 코드 |
-|---|---|
-| 엔진·서버·로그·비교표, DLG | 이승규 |
-| 라운드 재실행 도구 | 배병욱 PR #9의 방식을 참고해 새로 작성 |
-| 웹 대시보드 | 안태현 PR #8을 바탕으로 다시 작성 |
-
-선정 이유, 옮긴 위치, 새로 만든 것, 확인한 것은 [**docs/통합.md**](docs/통합.md)에 정리했습니다.
-
----
-
-## 단계별 진행
-
-명세 단계마다 무엇을 했는지와 결과는 아래 문서에 있습니다. 요약은 [docs/stages/README.md](docs/stages/README.md)에 모아 두었습니다.
-
-| 단계 | 한 일 | 문서 | 실험 결과 |
-|---|---|---|---|
-| 1. 기본 학습·데이터 준비 | 모델·학습 설정 탐색, 클라이언트 10명 분할 | [1_학습설정-결과.md](docs/stages/1_학습설정-결과.md) | [`1_setup/`](experiments/1_setup/) |
-| 2. 연합학습 환경 | Flask 서버 1개 + 가상 클라이언트 10개, REST API, 제출 검증 | [2_서버-API.md](docs/stages/2_서버-API.md) | |
-| 3. 공격과 방어 | 내부자 협력 공격(−5배), 클리핑·중앙값, DLG와 노이즈 방어 | [3_공격-방어.md](docs/stages/3_공격-방어.md), [3_DLG-결과.md](docs/stages/3_DLG-결과.md) | [`3_clip_threshold/`](experiments/3_clip_threshold/), [`3_dlg/`](experiments/3_dlg/) |
-| 4. 운영 환경별 비교 | 기준·지연·부분 참여·레이블 편향 × 정상·공격 × 집계 3 × 시드 3 = 72회 | [4_운영환경.md](docs/stages/4_운영환경.md) | [`4_main/`](experiments/4_main/) ([비교표](experiments/4_main/_tables/comparison.md)) |
-| 5. 로그 수집·평가 | 학습·복원 로그, 모델 저장, 공격 피해·방어 개선·정상 손실 계산, 재실행 도구 | [5_로그-평가.md](docs/stages/5_로그-평가.md), [통합.md 3-1](docs/통합.md) | |
-| 6. 원인 분석 | 사례 3건(공격·방어, 운영 환경, DLG), 방어 권고 2건 | [원인분석.md](reports/analysis/원인분석.md) | [`6_replay/`](experiments/6_replay/), [`3_dlg/`](experiments/3_dlg/) |
-
-## 디렉토리 구성
-
-### 깃허브 (커밋되는 파일)
-
-```
-websys-project-fedsec/
-├── README.md  pyproject.toml  requirements.txt  .gitignore
-├── src/fedsec/              # 실험 엔진 (웹과 독립된 Python 패키지)
-│   ├── data/  models/  client/  aggregation/  attacks/  defenses/
-│   ├── environments/        # 운영 환경: 참여·지연 일정, 가상 시간, 채택 판정
-│   ├── server/              # Flask REST API, 서버 상태, 제출 검증
-│   ├── experiment/  logger/  analysis/
-├── web/                     # Flask 웹 서버: app.py(실행) routes.py(주소) run.py(실행형) results.py·dlg.py(결과 읽기)
-│   └── templates/  static/  # 대시보드 화면(index.html), CSS·JS
-├── scripts/                 # 실행 스크립트 (서버, 클라이언트, 일괄 실행, 재실행, DLG, 비교표, 대시보드)
-├── tests/                   # 집계·방어 수치 예제, 서버·클라이언트·재실행·대시보드 테스트
-├── tools/                   # 학습 설정 탐색 도구
-├── configs/                 # 학습·공격·방어·DLG 설정, 환경 4개(env/), 데이터 분할(splits/)
-├── experiments/             # 실험 결과: 설정·실행 환경·요약·라운드·클라이언트 로그
-│   ├── 1_setup/             #   1단계 학습 설정 탐색 (lr·에폭·배치)
-│   ├── 3_clip_threshold/    #   클리핑 상한 정하기 (정상 업데이트 노름 측정)
-│   ├── 3_dlg/               #   모델 역추적(DLG)
-│   ├── 4_main/              #   본 실험 72회와 비교표(_tables/)
-│   ├── 4_main_repeat/       #   본 실험 재현 확인
-│   └── 6_replay/            #   원인 분석 재실행 (replay.json)
-├── docs/
-│   ├── 통합.md              # 대표 코드 통합 기록
-│   ├── stages/              # 명세 1~5단계 구현 내용·결과·한계
-│   └── 00_spec/ 01_proposal/ 02_plan/ 03_design/ decisions/ manuals/ meetings/ references/
-├── reports/                 # 원인 분석 3건, 그래프, 발표자료
-├── members/                 # 조원별 원래 구현 (근거 보관용)
-│   └── 조준협/  안태현/  배병욱/  이승규/
-├── data/README.md           # 데이터 받는 방법 (데이터 자체는 커밋 안 함)
-└── checkpoints/README.md
-```
-
-### 프로젝트 (로컬에서 실행하면 생기는 것까지)
-
-커밋되지 않는 파일(`.gitignore`)은 ✱로 표시했습니다. 실험을 돌린 PC에만 있습니다.
-
-```
-websys-project-fedsec/
-├── .venv/                          ✱ 가상환경 (pip install -e ".[test]")
-├── data/
-│   └── cifar-10-batches-py/        ✱ CIFAR-10 원본 (data/README.md 참고)
-├── docs/00_spec/Project 5.pdf      ✱ 과제 명세 원본
-├── experiments/
-│   ├── 4_main/<실행>/
-│   │   ├── config.yaml  env.json  summary.json  rounds.csv  clients.csv  class_acc.csv  client_acc.csv
-│   │   ├── server/server_rounds.csv  server/exclusions.csv
-│   │   ├── server/server.log  server_status.json   ✱ 서버 원시 로그, 상태 덤프
-│   │   └── models/round_XXX.pt     ✱ 라운드별 전역 모델 (재실행의 시작점, 원인 분석 출발 모델 12개만 커밋)
-│   ├── 6_replay/<실행>/models/       ✱
-│   ├── 3_dlg/<실험>/dlg_images/      ✱ 원본·복원 이미지
-│   └── live/                       ✱ 대시보드 실행형으로 돌린 시연 결과
-└── checkpoints/                    ✱
-```
-
----
-
-## 실험 설계
-
-### 학습 성능 비교 (필수)
-| 환경 | 설명 |
-|---|---|
-| 기준 | 참여율 100%, 지연 없음, 클래스 분포가 비슷한 데이터 |
-| 지연 | 고정된 3개 클라이언트가 가상 마감 시각 초과 |
-| 부분 참여 | 라운드마다 10개 중 5개 무작위 선택 |
-| 레이블 편향 | 같은 데이터의 클라이언트 배정만 변경 (표본 수 유지) |
-
-환경마다 **{정상, 내부자 공격} × {FedAvg, 클리핑, 중앙값}** 조합을 비교하고, 여러 시드로 반복합니다.
-
-- 환경 요인은 한 번에 하나씩만 바꿉니다.
-- 같은 환경·시드에서는 초기 모델·분할·악성 ID·참여·지연 일정을 공유합니다.
-- 채택 수가 0이면 악성 비율은 N/A, 3개 미만이면 모델을 갱신하지 않고 사유를 기록합니다.
-
-### 모델 역추적 (필수, 별도 실험)
-- 같은 이미지·모델·복원 초기값에서 노이즈 수준(없음·작음·큼)만 바꿔 MSE 비교
-- 노이즈의 영향과 복원 반복 부족을 구분해서 해석
-
----
-
-## 실행 환경
-
-- 본 실험 72회와 재실행은 **Mac의 Apple MPS**에서 실행했습니다. 실행마다 기기·torch 버전·커밋을 `env.json`에 남깁니다.
-- Kaggle GPU에서도 돌릴 수 있습니다 ([scripts/README.md](scripts/README.md#kaggle에서-실행)). Kaggle 결과는 세션이 끝나면 사라지므로 끝나기 전에 내려받아 둡니다.
-
----
-
-## 시작하기
+## 빠르게 실행하기
 
 ```bash
 git clone https://github.com/eseungq/websys-project-fedsec.git
 cd websys-project-fedsec
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"
-pytest -q                              # 테스트
+pytest -q                     # 설치 확인
+python web/app.py             # 대시보드 → http://127.0.0.1:8765/
 ```
 
-CIFAR-10은 [data/README.md](data/README.md)대로 `data/`에 받아 둡니다. 명령은 모두 레포 루트에서 실행합니다.
-
-```bash
-python web/app.py                                             # 대시보드 + 연합학습 서버 http://127.0.0.1:8765/
-python scripts/run_server_experiment.py --name demo --rounds 3 --env configs/env/delay.yaml --attack --aggregator median
-python scripts/run_main.py --dry-run                        # 본 실험 72회 상태
-python scripts/compare_main.py                              # 비교표·그래프
-python scripts/replay.py --run 4_main/baseline-attack-fedavg-s0 --from-round 5 --unmask 2   # 재실행
-python scripts/run_dlg.py --help                              # DLG
-```
-
-자세한 설치·실행 방법은 [설치·실행 설명서](docs/manuals/install.md), API는 [API 설명서](docs/manuals/api.md), 설정 파일은 [입력 파일 설명서](docs/manuals/input_files.md)에 있습니다. 스크립트별 결과 파일은 [scripts/README.md](scripts/README.md), 단계별 구현 내용과 결과는 [docs/stages/](docs/stages/README.md)에 있습니다.
-
-**결과:** 본 실험 비교표는 [experiments/4_main/_tables/comparison.md](experiments/4_main/_tables/comparison.md), 원인 분석 3건과 방어 권고 2건은 [reports/analysis/원인분석.md](reports/analysis/원인분석.md)에 있습니다.
-
-폴더 이름이 한글이므로 처음 한 번 git 설정을 해 둡니다.
-
-```bash
-git config --global core.precomposeunicode true   # macOS: 자모 분리로 같은 이름이 다른 폴더가 되는 문제 방지
-git config --global core.quotepath false          # git status에 한글이 \354… 로 보일 때
-```
+- CIFAR-10은 [data/README.md](data/README.md)대로 `data/`에 받아 둡니다. 명령은 모두 레포 루트에서 실행합니다.
+- 대시보드의 **조회형**은 끝난 실험·비교표·DLG 결과를 보여 주고, **실행형**은 짧은 실험을 직접 돌려 봅니다.
+- 실험 1회, 본 실험 72회, 재실행, DLG 명령은 [설치·실행 설명서](docs/manuals/install.md)에 있습니다.
+- 폴더 이름에 한글이 있으므로 처음 한 번 `git config --global core.precomposeunicode true`와 `git config --global core.quotepath false`를 해 둡니다.
 
 ---
 
-## 협업 규칙
+## 시스템 구조
 
-### 1. 커밋 메시지
-
-```
-<타입>: <제목>
-
-<파일 또는 영역>
-* 변경 내용
-* 변경 내용
+```mermaid
+flowchart LR
+    B["브라우저"] -- "대시보드 /, /api/*" --> S
+    C["클라이언트 실행 프로그램<br/>가상 클라이언트 10명을<br/>한 프로세스에서 순서대로 학습<br/>(공격은 클라이언트 쪽에서만)"] -- "REST /model, /update, /aggregate" --> S
+    S["Flask 서버 1개<br/>(127.0.0.1)"] --> F["src/fedsec<br/>집계·방어·검증·로그"]
 ```
 
-- 타입은 영어, 제목과 본문은 한국어로 씁니다. 제목 끝에 마침표를 찍지 않습니다.
-- 제목과 본문 사이에 빈 줄을 하나 둡니다. 변경이 아주 작으면 본문은 생략해도 됩니다.
-- `Co-Authored-By` 줄은 넣지 않습니다.
-- 커밋 하나에는 **한 가지 목적**만 담습니다. 기능 추가와 문서 수정은 나눠서 커밋합니다.
-
-| 타입 | 언제 쓰나 | 예시 제목 |
-|---|---|---|
-| `feat` | 새 기능 추가 | `feat: FedAvg 집계 함수 구현` |
-| `fix` | 버그 수정 | `fix: 짝수 개 중앙값 계산 오류 수정` |
-| `docs` | 문서만 변경 (README, docs/ 등) | `docs: README 실행 방법 추가` |
-| `refactor` | 동작은 그대로 두고 코드 구조만 개선 | `refactor: 클라이언트 학습 로직 분리` |
-| `test` | 테스트 추가·수정 | `test: 클리핑 수치 예제 테스트 추가` |
-| `exp` | 실험 설정·결과 추가 (이 프로젝트 전용) | `exp: 기준 환경 시드 0 실험 결과 추가` |
-| `chore` | 설정, 폴더 구조, 의존성 등 기타 작업 | `chore: requirements.txt 추가` |
-| `style` | 코드 포맷, 공백 등 의미 없는 변경 | `style: black 포맷 적용` |
-
-예시:
-
-```
-feat: 내부자 협력 공격 구현
-
-src/fedsec/attacks/collusion.py
-* 참여한 악성 클라이언트의 정상 업데이트 평균 × (-5) 벡터 생성
-* 악성 참여자 1명, 0명일 때 처리 추가
-
-tests/test_collusion.py
-* 악성 0명·1명·2명 수치 예제 테스트 추가
-```
-
-```
-fix: 채택 수 3개 미만일 때 모델이 갱신되는 문제 수정
-
-src/fedsec/server/state.py
-* 채택 수 3개 미만이면 집계를 건너뛰고 사유를 로그에 기록
-```
-
-### 2. 브랜치
-| 시기 | 브랜치 이름 |
-|---|---|
-| 11/24 머지 전 (조원 작업) | `member/<이름>` (한글 가능, 예: `member/조준협`) |
-| 머지 후 (기능 작업) | `feat/…`, `fix/…`, `docs/…`, `exp/…` |
-
-`main`에는 **PR로만** 합칩니다.
-
-### 3. PR 하는 방법
-
-```bash
-git switch main && git pull            # 최신 main 받기
-git switch -c member/<이름>            # 내 브랜치 만들기
-# 작업 → git add → git commit
-git push -u origin member/<이름>       # 처음 올릴 때
-```
-
-GitHub 화면에서:
-1. 레포 페이지에 뜨는 **Compare & pull request** 클릭
-2. 제목은 커밋 규칙 형식으로 씁니다. 본문에는 템플릿(`.github/pull_request_template.md`)이 자동으로 들어가니 칸을 채웁니다.
-3. 오른쪽 **Reviewers**에서 리뷰어 1명 이상 지정
-4. 승인을 받으면 **Merge pull request**(Create a merge commit) → **Delete branch**
-
-머지 뒤에는 각자 최신 `main`을 받고, 다 쓴 로컬 브랜치를 지웁니다. GitHub의 **Delete branch**는 GitHub 쪽 브랜치만 지우므로, 로컬 브랜치가 남아 있으면 다음에 같은 이름으로 `git switch -c`할 때 `already exists` 오류가 납니다.
-
-```bash
-git switch main && git pull            # 머지된 main 받기
-git branch -d member/<이름>            # 다 쓴 로컬 브랜치 삭제
-```
-
-**PR 규칙**
-
-| 항목 | 규칙 |
-|---|---|
-| PR 단위 | PR 하나에 목적 하나. 커밋은 목적별로 나눠 여러 개여도 됩니다 |
-| 대상 | `member/<이름>` 또는 `feat/…` 등 → `main` |
-| 제목 | 커밋 규칙과 같은 형식 `<타입>: <제목>` |
-| 본문 | 템플릿 칸 채우기: 무엇을 · 왜 · 확인 방법(실행한 명령과 결과). 실험 결과가 있으면 커밋 ID, 시드, 결과 폴더 |
-| 작업 중 | 끝나지 않았으면 **Draft**로 올려도 됩니다. 리뷰 받을 준비가 되면 **Ready for review** |
-| 리뷰 | 리뷰어 1명 이상 지정, 승인 1개 이상 받은 뒤 머지. 의견은 GitHub 코멘트로 |
-| 고칠 때 | 같은 브랜치에 커밋을 더해 push하면 PR이 자동으로 갱신됩니다. PR을 새로 만들지 않습니다 |
-| 머지 | 승인 후 **작성자가** 머지. 방식은 **Create a merge commit** (목적별 커밋 기록 유지, Squash 안 함) |
-| 머지 전 | `main`이 바뀌어 충돌이 나면 4번 절차로 해결 후 push |
-| 머지 후 | GitHub 브랜치와 로컬 브랜치 모두 삭제(위 명령). 다음 작업은 최신 `main`에서 같은 이름(`member/<이름>`)으로 다시 만듭니다 |
-
-**올리기 전 확인** (템플릿의 체크리스트와 같습니다)
-- 자기 폴더(`members/<이름>/`) 또는 PR 목적에 맞는 파일만 바뀜
-- 데이터, `*.pt`, 원시 로그, 노트북 출력, 과제 명세 PDF 없음 (6번 절)
-- 학번 같은 개인 정보 없음
-- 테스트가 있으면 통과
-- 커밋 메시지가 1번 규칙을 따름
-
-### 4. 충돌이 났을 때
-
-```bash
-git pull --no-rebase origin main       # main의 변경을 내 브랜치로 합치기 (--no-rebase: 병합 방식 고정)
-# 충돌 파일에서 <<<<<<< ======= >>>>>>> 표시를 찾아 남길 내용으로 고치고 표시 줄 삭제
-git add <고친 파일>
-git commit
-git push
-```
-
-자기 `members/<이름>/` 폴더만 고치면 충돌은 거의 나지 않습니다.
-
-### 5. 머지 방식 (11/24)
-1. 각자 `members/<이름>/README.md`를 나란히 놓고 **모듈 단위**로 좋은 코드를 고릅니다.
-2. 고른 코드를 `src/fedsec/`(엔진), `web/`(Flask 서버)로 옮기는 PR을 만듭니다.
-3. `members/`는 지우지 않고 근거로 남깁니다.
-4. 머지된 코드로 기준 설정을 다시 확인합니다.
-
-→ 11/24 통합 결과는 [docs/통합.md](docs/통합.md)에 있습니다. 엔진은 `src/fedsec/`, Flask 서버는 `src/fedsec/server/`, 대시보드는 `web/`에 들어갔습니다.
-
-### 6. 커밋하지 않는 것
-CIFAR-10 데이터, 모델 파일(`*.pt`), 원시 로그, 노트북 출력, 과제 명세 PDF.
-
-### 7. 실험과 커밋
-본 실험은 **커밋된 코드**로 돌리고, 결과에 커밋 ID를 남깁니다.
+- 중앙 Flask 서버 1개와 가상 클라이언트 10명이 같은 PC의 localhost에서 REST API로 통신합니다.
+- 네트워크 지연은 실제 네트워크가 아니라 **가상 시간**으로 판정합니다.
+- 대시보드도 같은 서버·같은 포트에서 뜹니다. 방어 함수와 서버는 악성 ID를 모릅니다.
 
 ---
+
+## 실험 설계
+
+| 환경 | 기준에서 바꾼 한 가지 |
+|---|---|
+| 기준 | 참여 100%, 지연 없음, 클래스 분포가 비슷한 데이터 |
+| 지연 | 고정된 3명이 가상 마감 시각을 넘김 |
+| 부분 참여 | 라운드마다 10명 중 5명 무작위 선택 |
+| 레이블 편향 | 같은 데이터의 클라이언트 배정만 바꿈 (표본 수 유지) |
+
+- 환경마다 {정상, 내부자 공격} × {FedAvg, 클리핑, 중앙값}을 시드 3개로 반복합니다 (72회). 같은 환경·시드는 초기 모델·분할·악성·참여·지연 일정이 같습니다.
+- 지표 (같은 환경·시드의 최종 테스트 정확도, %p)
+  - 공격 피해 = 정상 FedAvg − 공격 FedAvg
+  - 방어 개선 = 공격 + 방어 − 공격 FedAvg
+  - 정상 손실 = 정상 FedAvg − 정상 + 방어
+- 그 밖에 클래스별·클라이언트별 성능, 선택·채택·지연 제외 수, 실제 채택된 악성 비율, 가상 경과 시간과 실제 실행 시간을 기록합니다.
+- DLG는 학습 실험과 따로, 같은 이미지·모델·복원 초기값에서 노이즈만 바꿔 비교합니다.
+- 실행 환경: Mac의 Apple MPS (DLG는 CPU). 실행마다 기기·torch 버전·커밋을 `env.json`에 남깁니다.
+
+---
+
+## 단계별 진행
+
+| 단계 | 한 일 | 문서 | 실험 결과 |
+|---|---|---|---|
+| 1. 기본 학습·데이터 준비 | 모델·학습 설정 탐색, 클라이언트 10명 분할 | [1_학습설정-결과.md](docs/stages/1_학습설정-결과.md) | [`1_setup/`](experiments/1_setup/) |
+| 2. 연합학습 환경 | Flask 서버 1개 + 가상 클라이언트 10명, REST API, 제출 검증 | [2_서버-API.md](docs/stages/2_서버-API.md) | |
+| 3. 공격과 방어 | 내부자 협력 공격(−5배), 클리핑·중앙값, DLG와 노이즈 방어 | [3_공격-방어.md](docs/stages/3_공격-방어.md), [3_DLG-결과.md](docs/stages/3_DLG-결과.md) | [`3_clip_threshold/`](experiments/3_clip_threshold/), [`3_dlg/`](experiments/3_dlg/) |
+| 4. 운영 환경별 비교 | 환경 4 × 정상·공격 × 집계 3 × 시드 3 = 72회 | [4_운영환경.md](docs/stages/4_운영환경.md) | [`4_main/`](experiments/4_main/) |
+| 5. 로그 수집·평가 | 학습·복원 로그, 모델 저장, 지표 계산, 재실행 도구 | [5_로그-평가.md](docs/stages/5_로그-평가.md) | |
+| 6. 원인 분석 | 사례 3건(공격·방어, 운영 환경, DLG), 방어 권고 2건 | [원인분석.md](reports/analysis/원인분석.md) | [`6_replay/`](experiments/6_replay/) |
+
+단계별 요약은 [docs/stages/README.md](docs/stages/README.md)에 모아 두었습니다.
+
+---
+
+## 폴더 구조
+
+```
+src/fedsec/     실험 엔진 (데이터·모델·클라이언트·집계·공격·방어·환경·서버·로그)
+web/            Flask 웹 서버와 대시보드 (python web/app.py)
+scripts/        실행 스크립트 (실험 1회, 본 실험 72회, 재실행, DLG, 비교표)
+configs/        학습·공격·방어·DLG 설정, 환경 4개, 데이터 분할
+experiments/    실험 결과 (폴더 앞 번호 = 명세 단계)
+                1_setup/  3_clip_threshold/  3_dlg/  4_main/  4_main_repeat/  6_replay/
+reports/        원인 분석·방어 권고, 그래프, 발표자료
+docs/           단계별 문서(stages/), 설명서(manuals/), 통합 기록, 협업 규칙
+tests/  tools/  테스트, 학습 설정 탐색 도구
+members/        조원별 원래 구현 (근거 보관)
+```
+
+## 문서 안내
+
+| 문서 | 내용 |
+|---|---|
+| [설치·실행](docs/manuals/install.md), [API](docs/manuals/api.md), [입력 파일](docs/manuals/input_files.md) | 설명서 |
+| [scripts/README.md](scripts/README.md), [experiments/README.md](experiments/README.md), [web/README.md](web/README.md) | 스크립트·결과 파일·웹 파일별 설명 |
+| [docs/통합.md](docs/통합.md) | 11/24 조원별 구현에서 모듈별로 골라 대표 코드로 합친 기록 (엔진·DLG: 이승규, 재실행 방식: 배병욱 PR #9, 대시보드: 안태현 PR #8) |
+| [docs/협업규칙.md](docs/협업규칙.md) | 커밋·브랜치·PR 규칙 전체 |
+
+---
+
+## 확장 방향
+
+1. **두 결과의 관계 분석:** 내부자 협력 공격과 모델 역추적의 결과를 함께 분석합니다. 구체적인 방법은 추후 결정합니다.
+2. **D3 시각화:** 보고서를 쓴 뒤, 실험 결과를 D3로 시각화합니다.
+
+## 남은 일정
+
+> 제출: **12월 10일**
+
+| 날짜 | 할 일 |
+|---|---|
+| 11/26 (목) | 실험 결과 확인, 보고서 작성 |
+| 12/1 (화) | 보고서 수정·완성, 필요하면 PPT |
+| 12/3 (목), 12/8 (화) | 못한 것 마무리 |
+| 12/10 | 제출 |
+
+## 팀 작업
+
+- **커밋:** `<타입>: <제목>` (타입은 `feat`·`fix`·`docs`·`refactor`·`test`·`exp`·`chore`), 본문은 바꾼 파일 아래 `*` 목록. 한국어로 쓰고 `Co-Authored-By`는 넣지 않습니다.
+- **브랜치·PR:** `feat/…`, `fix/…`, `docs/…`, `exp/…` 브랜치에서 작업 → PR → 리뷰 1명 승인 → **Create a merge commit**으로 머지
+- **커밋하지 않는 것:** CIFAR-10 데이터, 모델 파일(`*.pt`, 원인 분석 출발 모델 12개만 예외), 원시 로그, 과제 명세 PDF
+- **실험:** 본 실험은 커밋된 코드로 돌리고 결과에 커밋 ID를 남깁니다.
+
+전체 규칙과 예시, 충돌 해결 방법은 [docs/협업규칙.md](docs/협업규칙.md)에 있습니다.
 
 ## 참고 자료
-
-전체 목록과 요약은 [`docs/references/`](docs/references/README.md)에 있습니다.
 
 - FedAvg: McMahan et al., *Communication-Efficient Learning of Deep Networks from Decentralized Data*, AISTATS 2017
 - DLG: Zhu et al., *Deep Leakage from Gradients*, NeurIPS 2019 · 공개 구현 [mit-han-lab/dlg](https://github.com/mit-han-lab/dlg)
 - Kairouz et al., *Advances and Open Problems in Federated Learning*
-- 사용한 공개 코드의 출처와 수정 사항은 구현 후 이 절에 추가합니다.
+- 공개 코드의 출처와 수정 사항: [FedAvg·서버](docs/stages/2_서버-API.md#공개-코드-출처와-달라진-점), [DLG](docs/stages/3_DLG-결과.md#공개-코드-출처와-달라진-점), 대시보드([web/LICENSE-dashboard](web/LICENSE-dashboard))
+- 전체 목록과 요약: [docs/references/](docs/references/README.md)

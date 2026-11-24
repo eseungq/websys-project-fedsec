@@ -2,7 +2,7 @@
 
 - 작성: 2026-11-19, 이승규
 - 상태: 구현·검증 끝 (테스트, 서버 없는 실행기와 결과 비교)
-- 명세 요구 산출물 "API·입력 파일 설명서"를 겸한다
+- 명세 요구 산출물 "API·입력 파일 설명서"를 겸합니다
 
 ---
 
@@ -28,12 +28,12 @@
   5. POST /aggregate ──────────────────────────────▶  채택 3개 이상이면 집계·갱신, 라운드 +1
   6. GET /model → 검증 정확도 평가, 로그 기록
 ```
-- 초기 모델은 서버가 시드로 만든다. 클라이언트는 받기만 한다.
-- 악성·지연 ID와 공격 여부는 클라이언트 프로그램만 안다. 서버는 참여자, 가상 마감, 집계 방식만 안다.
-- 클라이언트는 시작할 때 서버 `/status`의 시드·모델·환경·참여자 수·최소 채택 수·가상 마감·방어 설정을 자기 설정과 대조하고, 다르면 멈춘다.
-- 설정 파일은 정해진 항목만 받는다. 빠진 항목, 모르는 항목(오타), NaN·inf, 목록이 아닌 `ids`(예: `"12"`), 불가능한 조합(악성 0명인 공격 실험, 악성과 겹치는 지연 ID, 참여자 수나 지연을 뺀 인원보다 큰 최소 채택 수)은 실행 전에 거부한다.
-- 클라이언트는 제외 사유가 `late`(설계상 정상)가 아니거나 서버 오류이면 멈춘다. 결과가 "완료"로 남아 비교표에 섞이지 않게 하려는 것이다.
-- 발산: 로컬 학습 손실·업데이트, 제출할 업데이트의 노름(공격 벡터 포함, float32 범위 초과), 집계 뒤 전역 모델·검증 손실에 NaN·inf가 생기면 그 라운드는 기록하지 않고 끝낸다. 공격 실험이면 발산 전(지난 라운드 끝) 전역 모델로 최종 정확도를 계산하고 `summary.json`에 `diverged_round`·`rounds_completed`를 남긴다. 1라운드 집계 직후 전역 모델이 깨지면 정확도 없이 `diverged_round` 1, `rounds_completed` 0으로 남긴다(비교표에 넣지 않음). 정상 실행의 발산과 1라운드 로컬 학습의 발산(초기 모델에서 생기므로 공격과 무관)은 설정 문제로 보고 멈춘다 (`docs/stages/4_운영환경.md` 한계).
+- 초기 모델은 서버가 시드로 만듭니다. 클라이언트는 받기만 합니다.
+- 악성·지연 ID와 공격 여부는 클라이언트 프로그램만 압니다. 서버는 참여자, 가상 마감, 집계 방식만 압니다.
+- 클라이언트는 시작할 때 서버 `/status`의 시드·모델·환경·참여자 수·최소 채택 수·가상 마감·방어 설정을 자기 설정과 대조하고, 다르면 멈춥니다.
+- 설정 파일은 정해진 항목만 받습니다. 빠진 항목, 모르는 항목(오타), NaN·inf, 목록이 아닌 `ids`(예: `"12"`), 불가능한 조합(악성 0명인 공격 실험, 악성과 겹치는 지연 ID, 참여자 수나 지연을 뺀 인원보다 큰 최소 채택 수)은 실행 전에 거부합니다.
+- 클라이언트는 제외 사유가 `late`(설계상 정상)가 아니거나 서버 오류이면 멈춥니다. 결과가 "완료"로 남아 비교표에 섞이지 않게 하려는 것입니다.
+- 발산: 로컬 학습 손실·업데이트, 제출할 업데이트의 노름(공격 벡터 포함, float32 범위 초과), 집계 뒤 전역 모델·검증 손실에 NaN·inf가 생기면 그 라운드는 기록하지 않고 끝냅니다. 공격 실험이면 발산 전(지난 라운드 끝) 전역 모델로 최종 정확도를 계산하고 `summary.json`에 `diverged_round`·`rounds_completed`를 남깁니다. 1라운드 집계 직후 전역 모델이 깨지면 정확도 없이 `diverged_round` 1, `rounds_completed` 0으로 남깁니다(비교표에 넣지 않음). 정상 실행의 발산과 1라운드 로컬 학습의 발산(초기 모델에서 생기므로 공격과 무관)은 설정 문제로 보고 멈춥니다 (`docs/stages/4_운영환경.md` 한계).
 
 ### 실행
 ```bash
@@ -44,7 +44,7 @@ python scripts/run_server_experiment.py --name server_demo --rounds 3
 python scripts/serve.py --port 8765 --log-dir experiments/demo_server          # 터미널 1 (서버 기록 폴더는 결과 폴더와 다른 이름)
 python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   # 터미널 2
 ```
-- 결과 폴더에는 클라이언트 쪽 로그와 `server_status.json`(라운드·제외 기록 전체, 커밋 안 함), 서버 쪽 `server/`(`server_rounds.csv`, `exclusions.csv`, `server.log`)가 남는다
+- 결과 폴더에는 클라이언트 쪽 로그와 `server_status.json`(라운드·제외 기록 전체, 커밋 안 함), 서버 쪽 `server/`(`server_rounds.csv`, `exclusions.csv`, `server.log`)가 남습니다
 
 | 코드 | 역할 |
 |---|---|
@@ -58,13 +58,13 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 ---
 
 ## API
-모든 응답은 `{"ok": true/false, "data": ..., "error": 문자열 또는 null}` 형식이다.
-- Host 헤더가 `127.0.0.1`·`localhost`가 아니면 403. POST는 `Content-Type: application/json`만 받고, 아니면 제외 기록 없이 415(`/aggregate`도 빈 객체 `{}`를 보냄). 같은 PC의 브라우저를 통한 요청 위조와 기록 부풀리기를 막기 위해서다
-- 제외 기록(`exclusions.csv`)의 `client_id`·제출 라운드·버전은 정수일 때만 남긴다. `=`·`+`·`-`·`@`로 시작하는 칸은 앞에 `'`를 붙여 표 프로그램이 수식으로 실행하지 않게 한다
-- 제외 사유 문장(`error`)은 200자에서 자른다
+모든 응답은 `{"ok": true/false, "data": ..., "error": 문자열 또는 null}` 형식입니다.
+- Host 헤더가 `127.0.0.1`·`localhost`가 아니면 403. POST는 `Content-Type: application/json`만 받고, 아니면 제외 기록 없이 415(`/aggregate`도 빈 객체 `{}`를 보냄). 같은 PC의 브라우저를 통한 요청 위조와 기록 부풀리기를 막기 위해서입니다
+- 제외 기록(`exclusions.csv`)의 `client_id`·제출 라운드·버전은 정수일 때만 남깁니다. `=`·`+`·`-`·`@`로 시작하는 칸은 앞에 `'`를 붙여 표 프로그램이 수식으로 실행하지 않게 합니다
+- 제외 사유 문장(`error`)은 200자에서 자릅니다
 
 ### `GET /status`
-서버 상태. 클라이언트가 시작할 때 설정을 대조하는 데 쓴다.
+서버 상태. 클라이언트가 시작할 때 설정을 대조하는 데 씁니다.
 ```json
 {"round": 1, "model_version": 0, "pending": 0, "pending_clients": [], "num_clients": 10, "min_accepted": 3,
  "aggregator": "fedavg",
@@ -90,7 +90,7 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 - 제외: 4xx, `{"ok": false, "data": {"reason": "late"}, "error": "가상 완료 시각 3.0이 마감 1.5를 넘었습니다."}`
 
 ### `POST /aggregate`
-이번 라운드를 닫는다. 채택이 3개 이상이면 집계해 전역 모델을 바꾸고 모델 버전을 1 올린다. 라운드는 항상 1 오른다.
+이번 라운드를 닫습니다. 채택이 3개 이상이면 집계해 전역 모델을 바꾸고 모델 버전을 1 올립니다. 라운드는 항상 1 오릅니다.
 ```json
 {"round": 3, "model_version": 3, "updated": true, "skip_reason": null, "participants": [0, 1, 2],
  "accepted_clients": [0, 1, 2], "num_accepted": 7, "num_excluded": 3, "exclusion_reasons": {"late": 3},
@@ -120,7 +120,7 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 ---
 
 ## 입력 파일
-경로는 모두 레포 루트 기준이다.
+경로는 모두 레포 루트 기준입니다.
 
 | 파일 | 내용 | 바꾸는 방법 |
 |---|---|---|
@@ -130,21 +130,21 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 | `configs/splits/label_skew_a0.5_seed0.json` | 레이블 편향 분할 (IID 분할은 레포 루트 `configs/splits/iid_seed0.json`) | `scripts/make_split.py`로 만듦 |
 | `configs/dlg.yaml` | DLG 실험: 이미지, σ, 반복 횟수, 시드 | `run_dlg.py --sigmas --iterations --images --dummy-seed` |
 
-결과 파일 설명은 [`scripts/README.md`](../../scripts/README.md), 운영 환경 설정 값은 [4_운영환경.md](4_운영환경.md)에 있다.
+결과 파일 설명은 [`scripts/README.md`](../../scripts/README.md), 운영 환경 설정 값은 [4_운영환경.md](4_운영환경.md)에 있습니다.
 
 ---
 
 ## 검증
-- **서버 없는 실행기와 비교:** 같은 설정·시드로 3라운드를 돌려 최종 모델 가중치가 비트 단위로 같았다. 서버를 거치는 비용은 라운드당 약 0.5초(직렬화 + HTTP)
+- **서버 없는 실행기와 비교:** 같은 설정·시드로 3라운드를 돌려 최종 모델 가중치가 비트 단위로 같았습니다. 서버를 거치는 비용은 라운드당 약 0.5초(직렬화 + HTTP)
 - **테스트:** `tests/test_server.py`(API·제외 사유·집계), `tests/test_serialization.py`(가중치 변환·크기 상한·악성 파일 거부), `tests/test_client_round.py`(서버와 클라이언트를 Flask 테스트 클라이언트로 끝까지 돌림)
-- **안전:** 서버는 `127.0.0.1`에서만 받고, `/aggregate`가 실패하면 서버 상태(라운드·모델·대기 업데이트)를 바꾸지 않는다. 가중치는 `torch.load(weights_only=True)`로만 풀어 텐서 외 객체를 거부한다
+- **안전:** 서버는 `127.0.0.1`에서만 받고, `/aggregate`가 실패하면 서버 상태(라운드·모델·대기 업데이트)를 바꾸지 않습니다. 가중치는 `torch.load(weights_only=True)`로만 풀어 텐서 외 객체를 거부합니다
 
 ---
 
 ## 공개 코드 출처와 달라진 점
 
 - 출처: McMahan et al., "Communication-Efficient Learning of Deep Networks from Decentralized Data", AISTATS 2017. 명세의 "FedAvg 공개 구현" https://github.com/AshwinRJ/Federated-Learning-PyTorch (`src/federated_main.py`, `src/utils.py`의 `average_weights`, `src/update.py`의 `LocalUpdate`)
-- 코드를 가져오지 않고 같은 흐름(전역 모델 배포 → 로컬 학습 → 서버 평균)을 명세에 맞춰 새로 작성했다: `src/fedsec/aggregation/fedavg.py`, `src/fedsec/client/local_train.py`
+- 코드를 가져오지 않고 같은 흐름(전역 모델 배포 → 로컬 학습 → 서버 평균)을 명세에 맞춰 새로 작성했습니다: `src/fedsec/aggregation/fedavg.py`, `src/fedsec/client/local_train.py`
 
 | 항목 | 원 코드 | 이 구현 |
 |---|---|---|
@@ -152,7 +152,7 @@ python scripts/run_clients.py --name demo --server-url http://127.0.0.1:8765   #
 | 평균 방식 | 클라이언트 수로 나눈 단순 평균 | 채택된 업데이트만 표본 수에 비례해 가중 평균한 뒤 전역 가중치에 더함 |
 | 통신 | 한 프로세스 안에서 가중치를 직접 주고받음 | Flask REST API (`GET /model`, `POST /update`, `POST /aggregate`), 제출 검증과 제외 사유 기록 |
 | 데이터 분할 | 클라이언트 데이터를 학습 80%·검증 10%·테스트 10%로 다시 나눔 | 팀 공용 분할 파일. 클라이언트 데이터는 모두 학습용, 검증 5,000장은 따로, 공식 테스트는 최종 평가에만 |
-| 참여자 선택 | 라운드마다 `frac` 비율을 무작위 선택 | 환경 설정으로 정함 (기준 전원, 부분 참여 5명을 시드로 고정한 일정) |
+| 참여자 선택 | 라운드맙니다 `frac` 비율을 무작위 선택 | 환경 설정으로 정함 (기준 전원, 부분 참여 5명을 시드로 고정한 일정) |
 | 로컬 최적화 | SGD momentum 0.5 또는 Adam weight_decay 1e-4 | SGD momentum 0.9, weight_decay 5e-4 (`docs/stages/1_학습설정-결과.md`) |
 | 모델 | `CNNCifar` 등 | `simple_cnn` (합성곱 3층 + 완전연결 2층, BatchNorm 없음) |
 | 방어·공격 | 없음 | 노름 클리핑·좌표별 중앙값 집계, 내부자 협력 공격 (`docs/stages/3_공격-방어.md`) |
