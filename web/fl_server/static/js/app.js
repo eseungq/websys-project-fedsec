@@ -3,6 +3,7 @@
 "use strict";
 
 const POLL_MS = 1000;
+const POLL_RETRY_MS = 3000;   // 상태 조회가 실패했을 때 다시 시도하는 간격
 const STATUS_TEXT = { idle: "● 실행 대기", running: "◉ 실행 중", completed: "✓ 완료", stopped: "■ 중지됨", error: "▲ 오류" };
 const METRIC_COLUMNS = [
   { metric: "attack_damage", defense: "", label: "공격 피해" },
@@ -15,7 +16,12 @@ const MSE_LOG_MIN = -6;   // σ별 MSE 막대: 10^-6 ~ 10^0을 로그 눈금으�
 
 let allRuns = [];
 let selectedRunId = null;
-let pollTimer = null;
+let pollTimer = null;      // 다음 상태 조회 예약 (setTimeout). 조회는 하나씩만 돈다
+let pollSeq = 0;           // 상태 조회 번호: 나중에 보낸 조회가 있으면 늦게 온 이전 응답은 버린다
+let openSeq = 0;           // 결과 상세 조회 번호: 빠르게 다른 결과를 고르면 이전 응답은 버린다
+let currentMode = "browse";
+let liveRunId = null;      // 시작했거나 실행 중으로 본 실행 중 아직 끝 처리를 안 한 것
+let statusReadFailed = false;
 let dlgRuns = [];
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -44,6 +50,8 @@ function bindEvents() {
 }
 
 function setMode(mode) {
+  currentMode = mode;
+  if (mode === "live") pollStatus();   // 실행형으로 오면 진행 중인 실행을 바로 그린다
   document.querySelectorAll(".mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   byId("panel-browse").classList.toggle("hidden", mode !== "browse");
   byId("panel-live").classList.toggle("hidden", mode !== "live");
@@ -103,12 +111,15 @@ function renderRunList() {
 
 async function openRun(runId) {
   selectedRunId = runId;
+  const seq = ++openSeq;
   renderRunList();
   try {
     const detail = await api(`/api/runs/${encodePath(runId)}`);
+    if (seq !== openSeq || selectedRunId !== runId) return;
     renderRun(detail, { live: runId.startsWith("live/") });
     document.querySelector('.tab-btn[data-tab="tab-trends"]').click();
   } catch (err) {
+    if (seq !== openSeq || selectedRunId !== runId) return;
     setText("view-title", `결과를 읽지 못했습니다: ${err.message}`);
   }
 }
@@ -140,9 +151,9 @@ async function loadDlg() {
   else fillRows("dlg-tbody", [], "experiments/dlg/에 결과가 없습니다.", 8);
 }
 
-function dlgImage(runId, name, alt) {
+function dlgImage(runId, name, alt, className = "dlg-thumb") {
   if (!name) return el("span", { className: "helper-text", text: "없음" });
-  return el("img", { className: "dlg-thumb", attrs: { src: `/api/dlg/${encodeURIComponent(runId)}/images/${encodeURIComponent(name)}`, alt } });
+  return el("img", { className, attrs: { src: `/api/dlg/${encodeURIComponent(runId)}/images/${encodeURIComponent(name)}`, alt } });
 }
 
 function renderDlgRun(runId) {
@@ -164,12 +175,36 @@ function renderDlgRun(runId) {
   const bars = clear(byId("dlg-mse-bars"));
   bars.appendChild(barRows("막대는 로그 눈금 (10⁻⁶ ~ 1), 값은 이미지 평균 MSE", items));
 
-  const summary = clear(byId("dlg-summary"));
-  if (run.has_summary) {
-    summary.appendChild(el("div", { className: "section-subtitle", text: "summary.png (윗줄 원본, 아래는 σ별 복원)" }));
-    summary.appendChild(el("img", { className: "dlg-summary-img",
-      attrs: { src: `/api/dlg/${encodeURIComponent(run.id)}/images/summary.png`, alt: `${run.id} 원본·복원 요약` } }));
-  }
+  renderDlgGallery(run);
+}
+
+// 이미지마다 한 줄: 원본 | σ별 복원 (낱장 이미지 + 아래 설명)
+function dlgCard(runId, name, alt, captions) {
+  return el("figure", { className: "dlg-card" }, [
+    dlgImage(runId, name, alt, "dlg-card-img"),
+    el("figcaption", {}, captions.map((text) => el("div", { text }))),
+  ]);
+}
+
+function renderDlgGallery(run) {
+  const gallery = clear(byId("dlg-summary"));
+  const indices = [...new Set(run.results.map((r) => r.image_index))];
+  if (!indices.length) return;
+  const manyIterations = new Set(run.results.map((r) => r.iterations)).size > 1;
+  gallery.appendChild(el("div", { className: "section-subtitle", text: "원본과 복원 이미지" }));
+  indices.forEach((index) => {
+    const rows = run.results.filter((r) => r.image_index === index);
+    const first = rows[0];
+    const recon = rows.map((r) => dlgCard(run.id, r.reconstructed, `복원 ${index} σ=${r.sigma}`, [
+      `σ = ${r.sigma}`,
+      ...(manyIterations ? [`반복 ${r.iterations}`] : []),
+      isNum(r.mse) ? `MSE ${r.mse.toPrecision(3)}` : "MSE -",
+    ]));
+    gallery.appendChild(el("div", { className: "dlg-gallery-row" }, [
+      dlgCard(run.id, first.original, `원본 ${index}`, ["original", `#${index} ${first.class ?? first.label}`]),
+      el("div", { className: "dlg-gallery-recon" }, recon),
+    ]));
+  });
 }
 
 // ---- 비교표 탭 ----
@@ -256,6 +291,7 @@ async function startLive() {
   try {
     const started = await api("/api/start", body);
     selectedRunId = started.run_id;
+    liveRunId = started.run_id;   // 첫 응답이 이미 완료여도 끝 처리를 하도록
     document.querySelector('.tab-btn[data-tab="tab-trends"]').click();
     pollStatus();
   } catch (err) {
@@ -289,30 +325,57 @@ function renderLogTail(status) {
   box.classList.toggle("hidden", !show || !box.textContent);
 }
 
+function schedulePoll(delay) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(pollStatus, delay);
+}
+
 async function pollStatus() {
+  clearTimeout(pollTimer);
+  const seq = ++pollSeq;
   let status;
   try {
     status = await api("/api/status");
   } catch (err) {
-    showError(`상태를 읽지 못했습니다: ${err.message}`);
+    if (seq !== pollSeq) return;
+    statusReadFailed = true;
+    showError(`상태를 읽지 못했습니다: ${err.message} (잠시 뒤 다시 시도합니다)`);
+    schedulePoll(POLL_RETRY_MS);
     return;
+  }
+  if (seq !== pollSeq) return;
+  if (statusReadFailed) {
+    statusReadFailed = false;
+    showError("");
   }
   renderStatusPill(status);
   renderLogTail(status);
   const running = status.state === "running";
-  if (status.run_id && (running || selectedRunId === status.run_id)) {
-    setMode("live");
+  // 조회형으로 다른 결과를 보는 중이면 화면을 바꾸지 않는다 (상태 표시만 갱신)
+  if (currentMode === "live" && status.run_id) showLiveRun(status, running);
+  if (status.state === "error") showError(`실행이 오류로 끝났습니다 (코드 ${status.returncode}). 아래 출력을 확인하세요.`);
+  if (running) {
+    liveRunId = status.run_id;
+    schedulePoll(POLL_MS);
+  } else if (status.run_id && status.run_id === liveRunId) {
+    liveRunId = null;
+    await loadRuns();   // 끝난 실행을 목록에 넣고, 클래스별 정확도까지 있는 상세로 다시 그린다
+    // 목록을 읽는 동안 새 실행을 시작했으면 이전 실행을 열지 않는다
+    if (seq === pollSeq && liveRunId === null && currentMode === "live" && status.rounds_done > 0) openRun(status.run_id);
+  }
+}
+
+// 실행형 화면: 진행 중이면 상태 응답으로 그리고, 끝난 실행은 상세 결과로 연다 (조회형에서 고른 결과와 무관)
+function showLiveRun(status, running) {
+  // 진행 중이거나, 한 라운드도 못 끝내고 멈춘 실행(상세 결과가 없음)은 상태 응답으로 그린다
+  if (running || status.rounds_done === 0) {
+    selectedRunId = status.run_id;
+    openSeq += 1;   // 대기 중인 이전 결과 상세 응답이 이 화면을 덮지 않게
     renderRun({ id: status.run_id, summary: status.summary, plan: status.plan, replay: null, rounds: status.rounds,
       clients: status.clients, class_acc: [], client_acc: [], exclusions: [] }, { live: true, running });
     setText("real-time", `${status.elapsed_sec.toFixed(1)}s`);
-  }
-  if (status.state === "error") showError(`실행이 오류로 끝났습니다 (코드 ${status.returncode}). 아래 출력을 확인하세요.`);
-  if (running && !pollTimer) {
-    pollTimer = setInterval(pollStatus, POLL_MS);
-  } else if (!running && pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-    await loadRuns();   // 끝난 실행을 목록에 넣고, 클래스별 정확도까지 있는 상세로 다시 그린다
-    if (status.rounds_done > 0) openRun(status.run_id);
+  } else if (status.rounds_done > 0 && (selectedRunId !== status.run_id || liveRunId === null)) {
+    // 끝 처리가 남은 실행(liveRunId)은 pollStatus의 완료 처리가 열므로 중복으로 열지 않는다
+    openRun(status.run_id);
   }
 }

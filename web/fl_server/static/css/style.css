@@ -836,9 +836,54 @@ body {
   margin-top: 12px;
 }
 
+/* DLG 원본·복원 카드: 이미지마다 한 줄, 원본과 복원 사이는 세로선으로 나눔 */
+.dlg-gallery-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dlg-gallery-row > .dlg-card {
+  padding-right: 24px;
+  border-right: 2px solid var(--border-color);
+}
+
+.dlg-gallery-recon {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.dlg-card {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.dlg-card figcaption div:first-child {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dlg-card-img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 6px;
+  image-rendering: pixelated;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+/* CIFAR 32×32 이미지를 3배로 */
 .dlg-thumb {
-  width: 48px;
-  height: 48px;
+  width: 96px;
+  height: 96px;
   image-rendering: pixelated;
   border: 1px solid var(--border-color);
   border-radius: 4px;
