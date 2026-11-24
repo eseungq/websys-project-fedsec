@@ -55,9 +55,15 @@ MPS 기준 약 2시간 35분입니다.
 ```bash
 python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --unmask 2         # 악성 2번 조작만 해제
 python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --aggregator median  # 방어만 교체
-python scripts/replay.py --run matrix/baseline-normal-fedavg-s0 --from-round 35 --same              # 재현 확인
+python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --same               # 재현 확인
 ```
-저장된 모델 파일(`experiments/<실행>/models/round_XXX.pt`)이 있어야 합니다. 원인 분석에 쓴 출발 모델은 레포에 포함되어 있고, 나머지는 위 본 실험을 다시 돌리면 같은 파일이 만들어집니다.
+저장된 모델 파일(`experiments/<실행>/models/round_XXX.pt`)이 있어야 합니다. 레포에는 원인 분석에 쓴 출발 모델만 있습니다: `baseline-attack-fedavg-s0~2`, `delay-attack-fedavg-s0~2`의 `round_000.pt`·`round_005.pt`.
+
+다른 실행·라운드의 모델이 필요하면 그 실행을 다시 돌려야 합니다. `run_matrix.py`는 `summary.json`과 로그로 완료를 판정해 끝난 실행을 건너뛰므로, 실행 폴더를 다른 이름으로 옮긴 뒤 그 실행만 지정해 돌립니다. 같은 시드면 같은 모델이 나옵니다.
+```bash
+mv experiments/matrix/baseline-normal-fedavg-s0 experiments/matrix/baseline-normal-fedavg-s0.bak
+python scripts/run_matrix.py --envs baseline --attacks normal --aggregators fedavg --seeds 0
+```
 
 ### 모델 역추적(DLG)
 ```bash

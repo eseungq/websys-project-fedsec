@@ -18,5 +18,5 @@ experiments/<묶음>/<실행>/
 ├── rounds.csv  clients.csv  class_acc.csv  client_acc.csv   # 라운드·클라이언트·클래스 로그 (커밋)
 ├── server/server_rounds.csv  server/exclusions.csv          # 서버 집계·제외 기록 (커밋)
 ├── server/server.log  server_status.json        # 서버 원시 로그, 상태 덤프 (커밋 안 함)
-└── models/round_XXX.pt                           # 라운드별 전역 모델, 재실행의 시작점 (커밋 안 함)
+└── models/round_XXX.pt                           # 라운드별 전역 모델, 재실행의 시작점 (원인 분석 출발 모델 12개만 커밋)
 ```

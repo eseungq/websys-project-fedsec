@@ -3,7 +3,7 @@
 서버는 `127.0.0.1`에서만 받습니다 (기본 포트 8765). 연합학습 API와 대시보드 API가 한 서버에 있습니다.
 
 ## 공통 규칙
-- 모든 응답은 `{"ok": true/false, "data": ..., "error": 문자열 또는 null}` 형식입니다.
+- JSON API의 응답은 `{"ok": true/false, "data": ..., "error": 문자열 또는 null}` 형식입니다. 대시보드 화면(`GET /`, HTML)과 파일 응답(그래프 SVG, DLG 이미지 PNG)은 이 형식이 아니라 파일 그대로 돌려줍니다.
 - Host 헤더가 `127.0.0.1`·`localhost`가 아니면 403입니다.
 - POST는 `Content-Type: application/json`만 받습니다. 아니면 415입니다 (본문이 없는 `/aggregate`, `/api/stop`도 `{}`를 보냅니다).
 
@@ -36,7 +36,7 @@ curl -s http://127.0.0.1:8765/status
 | `GET /api/dlg` | | DLG 실험 목록과 결과 (σ, 반복, MSE, 레이블 복원, 이미지 파일 이름) |
 | `GET /api/dlg/<실험>/images/<파일>` | | 원본·복원 이미지 PNG |
 | `POST /api/start` | `{"env", "attack", "aggregator", "seed", "rounds", "name"}` (모두 선택) | `{"run_id": "live/<시각>-<이름>", "params"}` |
-| `GET /api/status` | | 실행형 진행 상황: `state`(idle, running, completed, stopped, error), 끝난 라운드, 라운드 기록, 마지막 라운드의 클라이언트 기록, 서버 라운드 |
+| `GET /api/status` | | 실행형 진행 상황: `state`(idle, running, completed, stopped, error), 끝난 라운드, 라운드 기록, 모든 라운드의 클라이언트 기록, 서버 라운드 |
 | `POST /api/stop` | `{}` | `{"stopped": true, "run_id"}` 또는 `{"stopped": false}` |
 
 `/api/start` 입력:
