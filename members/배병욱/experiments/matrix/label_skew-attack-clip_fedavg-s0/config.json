@@ -1,0 +1,192 @@
+{
+ "env": "label_skew",
+ "attack": true,
+ "defense": "clip_fedavg",
+ "seed": 0,
+ "rounds": 20,
+ "start_round": 1,
+ "disabled_attackers": [],
+ "clip_bound": 3.0,
+ "schedule": {
+  "env": "label_skew",
+  "seed": 0,
+  "malicious": [
+   4,
+   8
+  ],
+  "delayed": [],
+  "num_participants": 10,
+  "deadline": 3.0,
+  "base_time": 1.0,
+  "jitter": 0.2,
+  "delay": 5.0
+ },
+ "client_sizes": [
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500
+ ],
+ "class_distribution": [
+  [
+   83,
+   97,
+   87,
+   93,
+   1899,
+   1896,
+   100,
+   91,
+   87,
+   67
+  ],
+  [
+   83,
+   95,
+   81,
+   81,
+   82,
+   94,
+   1901,
+   89,
+   94,
+   1900
+  ],
+  [
+   81,
+   93,
+   93,
+   1886,
+   98,
+   79,
+   83,
+   76,
+   94,
+   1917
+  ],
+  [
+   72,
+   1895,
+   84,
+   90,
+   91,
+   118,
+   1845,
+   98,
+   98,
+   109
+  ],
+  [
+   102,
+   1883,
+   87,
+   105,
+   87,
+   91,
+   96,
+   121,
+   1849,
+   79
+  ],
+  [
+   99,
+   87,
+   97,
+   87,
+   110,
+   1864,
+   72,
+   94,
+   1880,
+   110
+  ],
+  [
+   96,
+   91,
+   1889,
+   71,
+   1888,
+   79,
+   102,
+   95,
+   93,
+   96
+  ],
+  [
+   1891,
+   93,
+   99,
+   80,
+   89,
+   105,
+   126,
+   1844,
+   90,
+   83
+  ],
+  [
+   79,
+   80,
+   104,
+   1888,
+   95,
+   96,
+   83,
+   1892,
+   101,
+   82
+  ],
+  [
+   1889,
+   110,
+   1883,
+   105,
+   84,
+   95,
+   85,
+   82,
+   89,
+   78
+  ]
+ ],
+ "base": {
+  "data_root": "data",
+  "split": "../../configs/splits/iid_seed0.json",
+  "model": "simple_cnn",
+  "device": "auto",
+  "rounds": 40,
+  "local_ep": 1,
+  "local_bs": 32,
+  "lr": 0.01,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "num_clients": 10,
+  "num_malicious": 2,
+  "attack_scale": -5.0,
+  "clip_bound": 3.0,
+  "min_accept": 3,
+  "checkpoint_every": 5,
+  "env": {
+   "delay": {
+    "num_delayed": 3,
+    "base_time": 1.0,
+    "jitter": 0.2,
+    "delay": 5.0,
+    "deadline": 3.0
+   },
+   "partial": {
+    "participants": 5
+   },
+   "label_skew": {
+    "skew": 0.8,
+    "shards_per_client": 2
+   }
+  }
+ }
+}

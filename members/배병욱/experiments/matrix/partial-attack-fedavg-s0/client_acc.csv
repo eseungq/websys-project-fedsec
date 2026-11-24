@@ -1,0 +1,11 @@
+client_id,malicious,train_acc
+0,False,9.8667
+1,False,10.4667
+2,False,9.7333
+3,False,10.4889
+4,True,10.0
+5,False,9.8889
+6,False,9.9778
+7,False,9.6667
+8,True,9.9111
+9,False,9.4444

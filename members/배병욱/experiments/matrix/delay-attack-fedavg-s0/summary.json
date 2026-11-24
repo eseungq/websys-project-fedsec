@@ -1,0 +1,23 @@
+{
+ "env": "delay",
+ "attack": true,
+ "defense": "fedavg",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 17,
+ "diverged_round": 17,
+ "final_val_acc": 10.36,
+ "final_test_acc": 10.0,
+ "final_test_loss": Infinity,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [
+  0,
+  2,
+  7
+ ],
+ "virtual_elapsed": 51.0,
+ "real_sec": 206.38
+}

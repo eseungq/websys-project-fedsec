@@ -1,0 +1,19 @@
+{
+ "env": "partial",
+ "attack": true,
+ "defense": "fedavg",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 8,
+ "diverged_round": 8,
+ "final_val_acc": 10.5,
+ "final_test_acc": 10.0,
+ "final_test_loss": NaN,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [],
+ "virtual_elapsed": 9.337,
+ "real_sec": 103.73
+}

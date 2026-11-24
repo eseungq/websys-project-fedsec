@@ -1,0 +1,6 @@
+round,selected,accepted,late_excluded,other_excluded,malicious_selected,malicious_accepted,overall_malicious_ratio,accepted_malicious_ratio,updated,reason,aggregate_norm,val_acc,val_loss,virtual_round_time,virtual_elapsed,real_round_sec
+1,10,10,0,0,2,2,0.2,0.2,True,,1.3529149293899536,11.84,2.384852,1.1996,1.1996,23.248
+2,10,10,0,0,2,2,0.2,0.2,True,,1.334993600845337,9.54,4.027982,1.1906,2.3902,22.393
+3,10,10,0,0,2,2,0.2,0.2,True,,2.2874112129211426,9.54,147.267778,1.185,3.5752,22.463
+4,10,10,0,0,2,2,0.2,0.2,True,,23.737655639648438,9.54,12520028.5696,1.1921,4.7673,22.272
+5,10,9,0,1,2,2,0.2,0.2222,True,,59628624805888.0,9.52,nan,1.1556,5.923,23.329

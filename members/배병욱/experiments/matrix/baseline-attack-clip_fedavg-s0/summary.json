@@ -1,0 +1,19 @@
+{
+ "env": "baseline",
+ "attack": true,
+ "defense": "clip_fedavg",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 20,
+ "diverged_round": null,
+ "final_val_acc": 65.5,
+ "final_test_acc": 64.97,
+ "final_test_loss": 0.9934141479492188,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [],
+ "virtual_elapsed": 23.684,
+ "real_sec": 555.55
+}

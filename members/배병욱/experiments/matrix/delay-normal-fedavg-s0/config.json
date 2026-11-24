@@ -1,0 +1,196 @@
+{
+ "env": "delay",
+ "attack": false,
+ "defense": "fedavg",
+ "seed": 0,
+ "rounds": 20,
+ "start_round": 1,
+ "disabled_attackers": [],
+ "clip_bound": null,
+ "schedule": {
+  "env": "delay",
+  "seed": 0,
+  "malicious": [
+   4,
+   8
+  ],
+  "delayed": [
+   0,
+   2,
+   7
+  ],
+  "num_participants": 10,
+  "deadline": 3.0,
+  "base_time": 1.0,
+  "jitter": 0.2,
+  "delay": 5.0
+ },
+ "client_sizes": [
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500,
+  4500
+ ],
+ "class_distribution": [
+  [
+   444,
+   416,
+   454,
+   446,
+   458,
+   467,
+   472,
+   451,
+   416,
+   476
+  ],
+  [
+   471,
+   428,
+   489,
+   423,
+   479,
+   463,
+   417,
+   452,
+   440,
+   438
+  ],
+  [
+   438,
+   444,
+   413,
+   443,
+   433,
+   460,
+   459,
+   493,
+   461,
+   456
+  ],
+  [
+   472,
+   492,
+   449,
+   431,
+   429,
+   440,
+   463,
+   406,
+   462,
+   456
+  ],
+  [
+   450,
+   471,
+   443,
+   452,
+   451,
+   447,
+   411,
+   456,
+   469,
+   450
+  ],
+  [
+   445,
+   448,
+   439,
+   461,
+   479,
+   467,
+   432,
+   452,
+   452,
+   425
+  ],
+  [
+   449,
+   464,
+   460,
+   465,
+   457,
+   455,
+   449,
+   442,
+   404,
+   455
+  ],
+  [
+   435,
+   462,
+   435,
+   453,
+   471,
+   421,
+   463,
+   467,
+   439,
+   454
+  ],
+  [
+   446,
+   427,
+   466,
+   436,
+   434,
+   455,
+   458,
+   402,
+   491,
+   485
+  ],
+  [
+   425,
+   472,
+   456,
+   476,
+   432,
+   442,
+   469,
+   461,
+   441,
+   426
+  ]
+ ],
+ "base": {
+  "data_root": "data",
+  "split": "../../configs/splits/iid_seed0.json",
+  "model": "simple_cnn",
+  "device": "auto",
+  "rounds": 40,
+  "local_ep": 1,
+  "local_bs": 32,
+  "lr": 0.01,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "num_clients": 10,
+  "num_malicious": 2,
+  "attack_scale": -5.0,
+  "clip_bound": 3.0,
+  "min_accept": 3,
+  "checkpoint_every": 5,
+  "env": {
+   "delay": {
+    "num_delayed": 3,
+    "base_time": 1.0,
+    "jitter": 0.2,
+    "delay": 5.0,
+    "deadline": 3.0
+   },
+   "partial": {
+    "participants": 5
+   },
+   "label_skew": {
+    "skew": 0.8,
+    "shards_per_client": 2
+   }
+  }
+ }
+}

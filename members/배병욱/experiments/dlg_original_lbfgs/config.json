@@ -1,0 +1,18 @@
+{
+ "images": [
+  3,
+  10
+ ],
+ "sigmas": [
+  0.0,
+  0.01,
+  0.1
+ ],
+ "iters": 600,
+ "check_iters": 300,
+ "model_seed": 0,
+ "init_seed": 0,
+ "out": "experiments/dlg",
+ "commit": "751801e",
+ "torch": "2.13.0"
+}

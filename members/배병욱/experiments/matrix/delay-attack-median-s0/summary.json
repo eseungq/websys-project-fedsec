@@ -1,0 +1,23 @@
+{
+ "env": "delay",
+ "attack": true,
+ "defense": "median",
+ "seed": 0,
+ "rounds_planned": 20,
+ "rounds_done": 20,
+ "diverged_round": null,
+ "final_val_acc": 61.96,
+ "final_test_acc": 61.11,
+ "final_test_loss": 1.3879066772460937,
+ "malicious": [
+  4,
+  8
+ ],
+ "delayed": [
+  0,
+  2,
+  7
+ ],
+ "virtual_elapsed": 60.0,
+ "real_sec": 238.76
+}
