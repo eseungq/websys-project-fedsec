@@ -1,5 +1,5 @@
 # pyproject.toml의 dependencies + test와 같게 유지 (설치는 pip install -e ".[test]")
-torch>=2.1
+torch>=2.10.0  # 체크포인트(.pt) 역직렬화 취약점 대응 (배병욱 PR #9 기준). 재실행이 저장 모델을 읽음
 torchvision>=0.16
 pyyaml>=6.0
 flask>=3.0

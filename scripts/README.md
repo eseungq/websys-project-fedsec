@@ -9,9 +9,27 @@
 | `serve.py`, `run_clients.py` | 있음 | Flask 서버, 가상 클라이언트 실행 프로그램을 따로 실행 |
 | `run_server_experiment.py` | 있음 | 서버를 띄우고 클라이언트를 실행한 뒤 서버 종료 (환경·공격·방어 선택) |
 | `run_matrix.py` | 있음 (본 실험 11/20) | 환경 4 × (정상, 공격) × 집계 3 × 시드 일괄 실행, `--dry-run` |
-| `replay_round.py` | 예정 | 저장된 상태에서 특정 라운드부터 조건 하나를 바꿔 재실행 |
+| `replay.py` | 있음 (11/24) | 저장된 라운드 모델에서 조건 하나(악성 조작 해제·방어 교체·공격 해제)만 바꿔 재실행, `--same`은 재현 확인. 결과 `experiments/replay/<name>/` + `replay.json` |
+| `serve_web.py` | 있음 (11/24) | 연합학습 서버와 웹 대시보드를 한 서버·한 포트로 실행 (조회형·실행형) |
 | `run_dlg.py` | 있음 | DLG 복원 실험 (CPU) |
 | `compare_matrix.py` | 있음 | `runs.csv` → 공격 피해·방어 개선·정상 손실 표, 정확도 막대그래프 (`experiments/<prefix>/_tables/`). `--envs`·`--seeds`·`--rounds`는 `run_matrix.py`에 준 값과 같게 |
+
+## 재실행 (명세 5·6단계)
+```bash
+python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --unmask 2        # 악성 2번 조작만 해제
+python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --aggregator median # 방어만 교체
+python scripts/replay.py --run matrix/baseline-attack-fedavg-s0 --from-round 5 --no-attack         # 공격 전체 해제
+python scripts/replay.py --run matrix/baseline-normal-fedavg-s0 --from-round 35 --same             # 원래 결과 재현 확인
+```
+- `--run`은 `experiments/` 기준 실행 폴더, `--from-round K`는 `models/round_K.pt`(라운드 K 집계 후 모델)에서 출발해 K+1라운드부터 돈다. `--rounds`를 안 주면 원래 마지막 라운드까지
+- 원래 실행의 `config.yaml`로 설정·환경·시드·악성/지연 ID를 다시 만들고, 지금 설정 파일과 다르면 멈춘다
+- 결과 폴더는 일반 실행과 같은 파일 + `replay.json`(원래 실행, 출발 라운드, 바꾼 조건, 원래 결과 요약). 테스트셋은 항상 평가한다
+
+## 대시보드
+```bash
+python scripts/serve_web.py                 # http://127.0.0.1:8765/ (연합학습 API도 같은 주소)
+python scripts/serve_web.py --port 8800
+```
 
 ## 하이퍼파라미터 비교 실행
 ```bash

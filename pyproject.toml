@@ -7,7 +7,7 @@ name = "fedsec"
 version = "0.1.0"
 description = "연합학습 보안 시뮬레이션 (2026-2 웹기반 시스템 Project 5)"
 requires-python = ">=3.10"
-dependencies = ["torch>=2.1", "torchvision>=0.16", "pyyaml>=6.0", "flask>=3.0", "requests>=2.31"]
+dependencies = ["torch>=2.10.0", "torchvision>=0.16", "pyyaml>=6.0", "flask>=3.0", "requests>=2.31"]
 
 [project.optional-dependencies]
 test = ["pytest>=7.0"]
